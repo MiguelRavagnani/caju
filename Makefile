@@ -8,6 +8,9 @@ dev:
 build: build-wasm-release
 	npm run build
 
+build-prod:
+	npm run build
+
 build-wasm:
 	cd wasm && wasm-pack build --target web --dev
 

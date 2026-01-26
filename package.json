@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run build:wasm && vite build",
+    "build": "vite build",
     "build:wasm": "cd wasm && wasm-pack build --target web --release",
+    "build:full": "npm run build:wasm && vite build",
     "build:wasm:dev": "cd wasm && wasm-pack build --target web --dev",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler pages deploy dist --project-name=caju",
@@ -32,8 +33,9 @@
     "prettier": "^3.2.5",
     "vite": "^5.4.21",
     "vite-plugin-glsl": "^1.2.1",
+    "vite-plugin-top-level-await": "^1.4.4",
     "vite-plugin-wasm": "^3.3.0",
-    "vite-plugin-top-level-await": "^1.4.4"
+    "wasm-pack": "^0.14.0"
   },
   "dependencies": {
     "three": "^0.182.0"
