@@ -1,45 +1,77 @@
 # Caju
 
-Interactive 3D visualization built with Three.js.
+A webpage a built for my dog. She's cool, and deserved a cool webpage. She's also a bit anoying most of the time, so the webpage reflects that.
+
+![til](./resource/caju.gif)
+
+Basically, this is an interactive 3D visualization with Three.js and Rust/WASM.
+
+## Tech Stack
+
+- Three.js for rendering
+- Rust compiled to WebAssembly for performance-critical operations (matrix math, BVH raycasting, and some mesh generation. Maybe overkill, but fun overkill)
+- Vite build system
+- Cloudflare Pages deployment
+
+## Requirements
+
+- Node.js 20+
+- Rust toolchain with `wasm32-unknown-unknown` target
+- wasm-pack
 
 ## Development
 
 ```bash
 npm install
+npm run build:wasm
 npm run dev
 ```
-
-Opens at `http://localhost:8000`
 
 ## Build
 
 ```bash
+# Full build (WASM + Vite)
+npm run build:full
+
+# Vite only (requires pre-built WASM)
 npm run build
 ```
 
-Output goes to `dist/`.
+## WASM
 
-## Features
+The `wasm/` directory contains Rust code compiled to WebAssembly:
 
-- Custom glass and subsurface scattering shaders via `onBeforeCompile`
-- Interactive vertex deformation with ripple effects
-- CRT post-processing with responsive mobile/desktop presets
-- PBR materials with HDRI lighting
+```bash
+# Build WASM (release)
+npm run build:wasm
 
-## Interaction
+# Build WASM (dev)
+npm run build:wasm:dev
+```
 
-- Click & drag to rotate camera
-- Scroll to zoom
-- Click on model to pull vertices, release for ripple
+## Makefile
+
+```bash
+make dev              # Start dev server
+make build            # Full build
+make lint             # Run all linters
+make fmt              # Format code
+make clippy           # Rust linter
+```
 
 ## Structure
 
 ```text
 src/
-├── components/     # 3D objects
-├── scenes/         # Scene setup
-├── shaders/        # GLSL shaders
-└── utils/          # Camera, renderer, helpers
+  components/   # 3D objects
+  scenes/       # Scene setup
+  shaders/      # GLSL shaders
+  utils/        # Camera, renderer, helpers
+  wasm/         # WASM bridge
+
+wasm/
+  src/          # Rust source
+  pkg/          # Compiled WASM output
 ```
 
 ## License
