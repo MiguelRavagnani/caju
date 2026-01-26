@@ -1,0 +1,5 @@
+dist/
+wasm/pkg/
+wasm/target/
+node_modules/
+*.md

@@ -1,0 +1,23 @@
+use wasm_bindgen::prelude::*;
+
+// Modules actively used by JS
+pub mod matrix_ops;
+pub mod raycast;
+
+pub use matrix_ops::MatrixComputer;
+pub use raycast::BVHRaycaster;
+
+// Modules available for future use (not exported to reduce WASM size)
+#[allow(dead_code)]
+mod animation;
+#[allow(dead_code)]
+mod audio_dsp;
+#[allow(dead_code)]
+mod geometry;
+#[allow(dead_code)]
+mod ripple_physics;
+
+#[wasm_bindgen(start)]
+pub fn init() {
+    // WASM module initialization
+}

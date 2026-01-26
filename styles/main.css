@@ -1,0 +1,201 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+}
+
+#info {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+}
+
+#info h1 {
+    font-size: 24px;
+    margin-bottom: 10px;
+    color: #00ff88;
+}
+
+#info p {
+    font-size: 14px;
+    margin: 5px 0;
+    opacity: 0.9;
+}
+
+.text-input-container {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    gap: 8px;
+    z-index: 1000;
+}
+
+.curved-text-input {
+    width: 180px;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: #fff;
+    font-family: monospace;
+    font-size: 13px;
+    backdrop-filter: blur(12px);
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.curved-text-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.curved-text-input:focus {
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.75);
+}
+
+.generate-btn {
+    padding: 12px 20px;
+    background: rgba(68, 170, 255, 0.3);
+    border: 1px solid rgba(68, 170, 255, 0.5);
+    border-radius: 8px;
+    color: #fff;
+    font-family: monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    transition: all 0.2s ease;
+}
+
+.generate-btn:hover {
+    background: rgba(68, 170, 255, 0.5);
+    border-color: rgba(68, 170, 255, 0.8);
+}
+
+.generate-btn:active {
+    transform: scale(0.98);
+}
+
+.shader-menu {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.shader-toggle {
+    width: 44px;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 12px;
+    transition: all 0.3s ease;
+}
+
+.shader-toggle:hover {
+    background: rgba(0, 0, 0, 0.8);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.shader-toggle .bar {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: #fff;
+    border-radius: 1px;
+    transition: all 0.3s ease;
+}
+
+.shader-toggle.open .bar:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+}
+
+.shader-toggle.open .bar:nth-child(2) {
+    opacity: 0;
+}
+
+.shader-toggle.open .bar:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -5px);
+}
+
+.shader-options {
+    position: absolute;
+    bottom: 54px;
+    right: 0;
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    backdrop-filter: blur(12px);
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.25s ease;
+}
+
+.shader-options.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.shader-option {
+    display: block;
+    width: 100%;
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+
+.shader-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.shader-option.active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.shader-option.active::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background: #4af;
+    border-radius: 50%;
+    margin-right: 10px;
+}

@@ -1,0 +1,10 @@
+# WASM Build Configuration
+#
+# To build for WASM, first install the target:
+#   rustup target add wasm32-unknown-unknown
+#
+# Then build with wasm-pack:
+#   wasm-pack build --target web --release
+#
+# To enable SIMD (optional, requires nightly):
+#   RUSTFLAGS='-C target-feature=+simd128' wasm-pack build --target web --release
