@@ -13,6 +13,8 @@ Basically, this is an interactive 3D visualization with Three.js and Rust/WASM.
 - Vite build system
 - Cloudflare Pages deployment
 
+3D models and textures were modeled in [Blender](https://www.blender.org/). Blender is really cool too.
+
 ## Requirements
 
 - Node.js 20+
@@ -73,7 +75,3 @@ wasm/
   src/          # Rust source
   pkg/          # Compiled WASM output
 ```
-
-## License
-
-MIT
