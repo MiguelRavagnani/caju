@@ -85,10 +85,20 @@ export class Caju {
             return;
         }
 
-        const material = new THREE.MeshPhysicalMaterial({
-            ...CONFIG.GLASS_MATERIAL,
-            side: THREE.DoubleSide
-        });
+        const useSimplifiedGlass = this.performanceSettings.simplifiedMaterials !== false;
+        let material;
+
+        if (useSimplifiedGlass) {
+            material = new THREE.MeshStandardMaterial({
+                ...CONFIG.GLASS_MATERIAL_SIMPLE,
+                side: THREE.DoubleSide
+            });
+        } else {
+            material = new THREE.MeshPhysicalMaterial({
+                ...CONFIG.GLASS_MATERIAL,
+                side: THREE.DoubleSide
+            });
+        }
 
         material.onBeforeCompile = (shader) => {
             createGlassShader(shader);

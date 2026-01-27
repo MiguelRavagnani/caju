@@ -37,6 +37,16 @@ export const CONFIG = {
         opacity: 1.0
     },
 
+    // Cheaper glass alternative - no transmission, uses env reflection instead
+    GLASS_MATERIAL_SIMPLE: {
+        color: '#e8e8ff',
+        metalness: 0.99,
+        roughness: 0.05,
+        transparent: true,
+        opacity: 0.1,
+        envMapIntensity: 1.5
+    },
+
     BLOOM_PARAMS: {
         mobile: { strength: 0.2, radius: 0.1, threshold: 1.2 },
         desktop: { strength: 0.5, radius: 0.1, threshold: 1.1 }

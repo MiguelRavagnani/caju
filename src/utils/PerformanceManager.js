@@ -29,8 +29,8 @@ export class PerformanceManager {
             antialias: false, // MSAA is expensive
             ripplesEnabled: true, // Keep ripples enabled - core feature
             aoMapIntensity: 0.8,
-            simplifiedMaterials: true, // Use Standard materials for better performance
-            reducedTextures: false // Load all textures initially
+            simplifiedMaterials: false, // Use Standard materials for better performance
+            reducedTextures: true // Load all textures initially
         };
 
         return settings;
@@ -76,7 +76,11 @@ export class PerformanceManager {
                 this.hasAdjusted = true;
 
                 if (this.onSettingsChange) {
-                    this.onSettingsChange({ postProcessingEnabled: false });
+                    this.onSettingsChange({
+                        postProcessingEnabled: false,
+                        simplifiedMaterials: true,
+                        pixelRatio: 0.75,   
+                    });
                 }
             } else {
                 this.hasAdjusted = true;
