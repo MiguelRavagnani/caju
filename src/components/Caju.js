@@ -19,6 +19,9 @@ export class Caju {
         this.inflateRipple = null;
         this.raycaster = new THREE.Raycaster();
 
+        this._attachmentPoint = new THREE.Vector3();
+        this._inverseMatrix = new THREE.Matrix4();
+
         this.audioContext = null; // Created lazily on first user interaction
         this.sounds = { squeakIn: null, squeakOut: null };
         this.currentSource = null;
@@ -216,14 +219,13 @@ export class Caju {
     getAttachmentPoint(offset = { x: 0, y: 0.0, z: 0 }) {
         if (!this.mesh) return null;
 
-        const worldPos = new THREE.Vector3();
-        this.mesh.getWorldPosition(worldPos);
+        this.mesh.getWorldPosition(this._attachmentPoint);
 
-        worldPos.x += offset.x;
-        worldPos.y += offset.y;
-        worldPos.z += offset.z;
+        this._attachmentPoint.x += offset.x;
+        this._attachmentPoint.y += offset.y;
+        this._attachmentPoint.z += offset.z;
 
-        return worldPos;
+        return this._attachmentPoint;
     }
 
     update(deltaTime) {
@@ -248,28 +250,29 @@ export class Caju {
         if (!this.mesh) return;
 
         // Compute inverse matrix once on CPU (faster than per-vertex in shader)
-        let inverseMatrix;
+        let computed = false;
 
         if (WasmBridge.isReady()) {
             // Use WASM for faster matrix computation
             const inverseArray = WasmBridge.computeInverseMatrix(this.mesh.matrixWorld);
             if (inverseArray) {
-                inverseMatrix = new THREE.Matrix4().fromArray(inverseArray);
+                this._inverseMatrix.fromArray(inverseArray);
+                computed = true;
             }
         }
 
         // Fallback to Three.js if WASM not available
-        if (!inverseMatrix) {
-            inverseMatrix = this.mesh.matrixWorld.clone().invert();
+        if (!computed) {
+            this._inverseMatrix.copy(this.mesh.matrixWorld).invert();
         }
 
         // Update all shader uniforms
         if (this.glassUniforms?.uInverseModelMatrix) {
-            this.glassUniforms.uInverseModelMatrix.value.copy(inverseMatrix);
+            this.glassUniforms.uInverseModelMatrix.value.copy(this._inverseMatrix);
         }
         this.sssUniforms.forEach((uniforms) => {
             if (uniforms.uInverseModelMatrix) {
-                uniforms.uInverseModelMatrix.value.copy(inverseMatrix);
+                uniforms.uInverseModelMatrix.value.copy(this._inverseMatrix);
             }
         });
     }

@@ -32,6 +32,20 @@ export class Info {
         this.currentQuaternion = new THREE.Quaternion();
         this.targetQuaternion = new THREE.Quaternion();
         this.lookAtHelper = new THREE.Object3D();
+        
+        this._startPos = new THREE.Vector3();
+        this._endPos = new THREE.Vector3();
+        this._midPoint = new THREE.Vector3();
+        this._controlPoint1 = new THREE.Vector3();
+        this._controlPoint2 = new THREE.Vector3();
+        this._curvePoints = [
+            new THREE.Vector3(),
+            new THREE.Vector3(),
+            new THREE.Vector3(),
+            new THREE.Vector3(),
+            new THREE.Vector3()
+        ];
+        this._stringCurve = new THREE.CatmullRomCurve3(this._curvePoints);
 
         this.loadModel(onLoad);
     }
@@ -152,32 +166,30 @@ export class Info {
     }
 
     updateString() {
-        const startPos = this.mesh.position.clone();
-        const endPos = this.targetPosition.clone();
+        this._startPos.copy(this.mesh.position);
+        this._endPos.copy(this.targetPosition);
 
         // Calculate midpoint with sag (catenary-like curve)
-        const midPoint = new THREE.Vector3().lerpVectors(startPos, endPos, 0.5);
-        const distance = startPos.distanceTo(endPos);
+        this._midPoint.lerpVectors(this._startPos, this._endPos, 0.5);
+        const distance = this._startPos.distanceTo(this._endPos);
         const sag = this.config.stringSag * (distance / 5);
-        midPoint.y -= sag;
+        this._midPoint.y -= sag;
 
         // Control points for natural curve
-        const controlPoint1 = new THREE.Vector3().lerpVectors(startPos, midPoint, 0.5);
-        controlPoint1.y -= sag * 0.3;
+        this._controlPoint1.lerpVectors(this._startPos, this._midPoint, 0.5);
+        this._controlPoint1.y -= sag * 0.3;
 
-        const controlPoint2 = new THREE.Vector3().lerpVectors(midPoint, endPos, 0.5);
-        controlPoint2.y -= sag * 0.3;
+        this._controlPoint2.lerpVectors(this._midPoint, this._endPos, 0.5);
+        this._controlPoint2.y -= sag * 0.3;
 
-        // Create smooth curve
-        const curve = new THREE.CatmullRomCurve3([
-            startPos,
-            controlPoint1,
-            midPoint,
-            controlPoint2,
-            endPos
-        ]);
+        // Update curve points in place (avoid recreating CatmullRomCurve3)
+        this._curvePoints[0].copy(this._startPos);
+        this._curvePoints[1].copy(this._controlPoint1);
+        this._curvePoints[2].copy(this._midPoint);
+        this._curvePoints[3].copy(this._controlPoint2);
+        this._curvePoints[4].copy(this._endPos);
 
-        const points = curve.getPoints(32);
+        const points = this._stringCurve.getPoints(32);
 
         // Convert to flat array for LineGeometry
         const positions = [];
