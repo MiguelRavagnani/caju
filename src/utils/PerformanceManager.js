@@ -30,7 +30,7 @@ export class PerformanceManager {
             ripplesEnabled: true, // Keep ripples enabled - core feature
             aoMapIntensity: 0.8,
             simplifiedMaterials: false, // Use Standard materials for better performance
-            reducedTextures: true // Load all textures initially
+            reducedTextures: false // Load all textures initially
         };
 
         return settings;
