@@ -16,16 +16,22 @@ export class MainScene {
         const directionalLight = new THREE.DirectionalLight('#fffdf2', 2.0);
         directionalLight.position.set(5, 10, 7.5);
         directionalLight.castShadow = true;
+        directionalLight.matrixAutoUpdate = false;
+        directionalLight.updateMatrix();
         this.scene.add(directionalLight);
 
         // Fill light from opposite side
         const fillLight = new THREE.DirectionalLight('#197dff', 3.3);
         fillLight.position.set(-5, 5, -5);
+        fillLight.matrixAutoUpdate = false;
+        fillLight.updateMatrix();
         this.scene.add(fillLight);
 
         // Rim light for edge definition
         const rimLight = new THREE.PointLight('#fa2e2e', 2.5);
         rimLight.position.set(0, 3, -8);
+        rimLight.matrixAutoUpdate = false;
+        rimLight.updateMatrix();
         this.scene.add(rimLight);
     }
 
