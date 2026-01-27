@@ -4,6 +4,7 @@
  * Currently provides:
  *   - MatrixComputer: Fast matrix inverse/normal computations
  *   - BVHRaycaster: Accelerated ray-mesh intersection
+ *   - TextureGenerator: Pre-computed noise/LUT textures for shaders
  *
  * Usage:
  *   import { WasmBridge } from './wasm/WasmBridge.js';
@@ -22,6 +23,7 @@ class WasmBridgeClass {
         this.initError = null;
         this._matrix = null;
         this._raycasters = new Map();
+        this._textureGen = null;
     }
 
     /**
@@ -42,6 +44,10 @@ class WasmBridgeClass {
 
             if (wasmModule.MatrixComputer) {
                 this._matrix = new wasmModule.MatrixComputer();
+            }
+
+            if (wasmModule.TextureGenerator) {
+                this._textureGen = new wasmModule.TextureGenerator(Date.now() & 0xffffffff);
             }
 
             this.ready = true;
@@ -148,12 +154,49 @@ class WasmBridgeClass {
         this._raycasters.delete(id);
     }
 
+    // ============================================
+    // Texture Generation
+    // ============================================
+
+    /**
+     * Generate a tileable noise texture
+     * @param {number} size - Texture size (power of 2, e.g., 256)
+     * @returns {Uint8Array|null} - RGBA pixel data
+     */
+    generateNoiseTexture(size) {
+        if (!this.ready || !this._textureGen) return null;
+        return new Uint8Array(this._textureGen.generate_noise(size));
+    }
+
+    /**
+     * Generate blue noise texture (better for film grain)
+     * @param {number} size - Texture size (power of 2)
+     * @returns {Uint8Array|null} - RGBA pixel data
+     */
+    generateBlueNoiseTexture(size) {
+        if (!this.ready || !this._textureGen) return null;
+        return new Uint8Array(this._textureGen.generate_blue_noise(size));
+    }
+
+    /**
+     * Generate color grading LUT
+     * @param {number} size - LUT resolution (e.g., 32)
+     * @param {number} contrast - Contrast multiplier (1.0 = neutral)
+     * @param {number} saturation - Saturation multiplier (1.0 = neutral)
+     * @returns {Uint8Array|null} - RGBA pixel data (size*size x size)
+     */
+    generateColorLUT(size, contrast = 1.0, saturation = 1.0) {
+        if (!this.ready || !this._textureGen) return null;
+        return new Uint8Array(this._textureGen.generate_color_lut(size, contrast, saturation));
+    }
+
     /**
      * Dispose all resources
      */
     dispose() {
         this._raycasters.clear();
         this._matrix = null;
+        this._textureGen = null;
         this.ready = false;
     }
 }

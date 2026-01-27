@@ -9,7 +9,8 @@ import fragmentShader from './crt.frag.glsl';
 export const CRTShader = {
     uniforms: {
         tDiffuse: { value: null },
-        tDepth: { value: null }, // Depth texture for depth-based effects
+        tDepth: { value: null },
+        tNoise: { value: null }, // Pre-computed noise texture from WASM
         uTime: { value: 1.0 },
         uResolution: { value: { x: 1920, y: 1080 } },
         uCameraNear: { value: 0.1 },
