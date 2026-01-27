@@ -29,6 +29,7 @@ export class Renderer {
         this.renderer.shadowMap.enabled = performanceSettings.shadowsEnabled;
         if (performanceSettings.shadowsEnabled) {
             this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.renderer.shadowMap.autoUpdate = true;
         }
 
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -290,6 +291,18 @@ export class Renderer {
     enableBloom(enabled) {
         if (this.bloomPass) {
             this.bloomPass.enabled = enabled;
+        }
+    }
+
+    freezeShadowMap() {
+        if (this.renderer.shadowMap.enabled) {
+            this.renderer.shadowMap.autoUpdate = false;
+        }
+    }
+
+    updateShadowMap() {
+        if (this.renderer.shadowMap.enabled) {
+            this.renderer.shadowMap.needsUpdate = true;
         }
     }
 

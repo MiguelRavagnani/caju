@@ -477,6 +477,7 @@ class App {
         if (this.isLoading) {
             if (now - this.loadingStartTime > CONFIG.LOADING_DURATION) {
                 this.isLoading = false;
+                this.renderer.freezeShadowMap();
             } else {
                 this.needsRender = true;
             }
