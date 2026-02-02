@@ -15,6 +15,7 @@
  */
 
 let wasmModule = null;
+let wasmMemory = null;
 
 class WasmBridgeClass {
     constructor() {
@@ -24,6 +25,15 @@ class WasmBridgeClass {
         this._matrix = null;
         this._raycasters = new Map();
         this._textureGen = null;
+        // Zero-copy output views into WASM memory
+        this._inverseView = null;
+        this._normalView = null;
+        this._mvpView = null;
+        // SharedArrayBuffer support (true zero-copy input)
+        this._sharedSupported = false;
+        this._inputView = null;
+        this._viewMatrixView = null;
+        this._projectionView = null;
     }
 
     /**
@@ -40,10 +50,14 @@ class WasmBridgeClass {
     async _doInitialize() {
         try {
             wasmModule = await import('../../wasm/pkg/caju_wasm.js');
-            await wasmModule.default();
+            // default() returns the wasm exports which includes memory
+            const wasmExports = await wasmModule.default();
+            wasmMemory = wasmExports.memory;
 
             if (wasmModule.MatrixComputer) {
                 this._matrix = new wasmModule.MatrixComputer();
+                this._setupZeroCopyViews();
+                this._checkSharedArrayBufferSupport();
             }
 
             if (wasmModule.TextureGenerator) {
@@ -51,13 +65,73 @@ class WasmBridgeClass {
             }
 
             this.ready = true;
-            console.log('[WASM] Modules initialized');
+            const sharedStatus = this._sharedSupported ? 'SharedArrayBuffer enabled' : 'SharedArrayBuffer unavailable';
+            console.log(`[WASM] Modules initialized (zero-copy output, ${sharedStatus})`);
             return true;
         } catch (error) {
             this.initError = error;
             this.ready = false;
             console.warn('[WASM] Init failed, using JS fallback:', error.message);
             return false;
+        }
+    }
+
+    /**
+     * Setup Float32Array views directly into WASM memory (zero-copy)
+     */
+    _setupZeroCopyViews() {
+        if (!this._matrix || !wasmMemory) return;
+
+        const inversePtr = this._matrix.get_inverse_ptr();
+        const normalPtr = this._matrix.get_normal_ptr();
+        const mvpPtr = this._matrix.get_mvp_ptr();
+
+        // Create views directly into WASM memory - no copying!
+        this._inverseView = new Float32Array(wasmMemory.buffer, inversePtr, 16);
+        this._normalView = new Float32Array(wasmMemory.buffer, normalPtr, 16);
+        this._mvpView = new Float32Array(wasmMemory.buffer, mvpPtr, 16);
+    }
+
+    /**
+     * Refresh views if WASM memory was resized (rare but possible)
+     */
+    _refreshViewsIfNeeded() {
+        if (this._inverseView && this._inverseView.buffer !== wasmMemory.buffer) {
+            this._setupZeroCopyViews();
+        }
+    }
+
+    /**
+     * Check if SharedArrayBuffer is available and set up shared input views
+     * Requires CORS headers: Cross-Origin-Opener-Policy: same-origin
+     *                        Cross-Origin-Embedder-Policy: require-corp
+     */
+    _checkSharedArrayBufferSupport() {
+        if (!this._matrix || !wasmMemory) return;
+
+        // Check if SharedArrayBuffer is available (requires CORS headers)
+        if (typeof SharedArrayBuffer === 'undefined' || !crossOriginIsolated) {
+            this._sharedSupported = false;
+            console.log('[WASM] SharedArrayBuffer not available (missing CORS headers)');
+            return;
+        }
+
+        try {
+            // Get pointers to shared input buffers
+            const inputPtr = this._matrix.get_input_ptr();
+            const viewPtr = this._matrix.get_view_ptr();
+            const projectionPtr = this._matrix.get_projection_ptr();
+
+            // Create views for writing input data directly to WASM memory
+            this._inputView = new Float32Array(wasmMemory.buffer, inputPtr, 16);
+            this._viewMatrixView = new Float32Array(wasmMemory.buffer, viewPtr, 16);
+            this._projectionView = new Float32Array(wasmMemory.buffer, projectionPtr, 16);
+
+            this._sharedSupported = true;
+            console.log('[WASM] SharedArrayBuffer input views ready');
+        } catch (e) {
+            this._sharedSupported = false;
+            console.warn('[WASM] Failed to setup shared input views:', e.message);
         }
     }
 
@@ -69,12 +143,113 @@ class WasmBridgeClass {
         return this.initError;
     }
 
-    // ============================================
-    // Matrix Operations
-    // ============================================
+    /**
+     * Get the matrix computer instance (for benchmarking)
+     */
+    get matrixComputer() {
+        return this._matrix;
+    }
+
+    // --- Matrix Operations (Zero-Copy) ---
 
     /**
-     * Compute inverse of a Three.js matrix
+     * Compute inverse matrix - ZERO COPY
+     * Returns a view directly into WASM memory (no allocation per call)
+     * @param {Float32Array} elements - Matrix elements (16 floats)
+     * @returns {Float32Array} - View into WASM memory (do not store long-term!)
+     */
+    invertMatrixZeroCopy(elements) {
+        if (!this.ready || !this._matrix) return null;
+        this._refreshViewsIfNeeded();
+        this._matrix.invert_inplace(elements);
+        return this._inverseView;
+    }
+
+    /**
+     * Compute normal matrix - ZERO COPY
+     * @param {Float32Array} elements - Model matrix elements
+     * @returns {Float32Array} - View into WASM memory
+     */
+    normalMatrixZeroCopy(elements) {
+        if (!this.ready || !this._matrix) return null;
+        this._refreshViewsIfNeeded();
+        this._matrix.normal_inplace(elements);
+        return this._normalView;
+    }
+
+    /**
+     * Compute MVP matrix - ZERO COPY
+     * @param {Float32Array} model - Model matrix elements
+     * @param {Float32Array} view - View matrix elements
+     * @param {Float32Array} projection - Projection matrix elements
+     * @returns {Float32Array} - View into WASM memory
+     */
+    mvpMatrixZeroCopy(model, view, projection) {
+        if (!this.ready || !this._matrix) return null;
+        this._refreshViewsIfNeeded();
+        this._matrix.mvp_inplace(model, view, projection);
+        return this._mvpView;
+    }
+
+    // --- SharedArrayBuffer (true zero-copy) ---
+
+    /**
+     * Check if SharedArrayBuffer is supported
+     */
+    isSharedSupported() {
+        return this._sharedSupported;
+    }
+
+    /**
+     * Compute inverse matrix - TRUE ZERO COPY (SharedArrayBuffer)
+     * Writes input directly to WASM memory, no copying in either direction
+     * @param {Float32Array} elements - Matrix elements (16 floats)
+     * @returns {Float32Array} - View into WASM memory
+     */
+    invertMatrixShared(elements) {
+        if (!this.ready || !this._matrix || !this._sharedSupported) return null;
+        this._refreshViewsIfNeeded();
+        // Write input directly to WASM memory (single set operation)
+        this._inputView.set(elements);
+        // Compute - no parameter passing, reads from internal buffer
+        this._matrix.invert_shared();
+        return this._inverseView;
+    }
+
+    /**
+     * Compute normal matrix - TRUE ZERO COPY (SharedArrayBuffer)
+     * @param {Float32Array} elements - Model matrix elements
+     * @returns {Float32Array} - View into WASM memory
+     */
+    normalMatrixShared(elements) {
+        if (!this.ready || !this._matrix || !this._sharedSupported) return null;
+        this._refreshViewsIfNeeded();
+        this._inputView.set(elements);
+        this._matrix.normal_shared();
+        return this._normalView;
+    }
+
+    /**
+     * Compute MVP matrix - TRUE ZERO COPY (SharedArrayBuffer)
+     * @param {Float32Array} model - Model matrix elements
+     * @param {Float32Array} view - View matrix elements
+     * @param {Float32Array} projection - Projection matrix elements
+     * @returns {Float32Array} - View into WASM memory
+     */
+    mvpMatrixShared(model, view, projection) {
+        if (!this.ready || !this._matrix || !this._sharedSupported) return null;
+        this._refreshViewsIfNeeded();
+        this._inputView.set(model);
+        this._viewMatrixView.set(view);
+        this._projectionView.set(projection);
+        this._matrix.mvp_shared();
+        return this._mvpView;
+    }
+
+    // --- Matrix Operations (Legacy, allocates) ---
+
+    /**
+     * Compute inverse of a Three.js matrix (legacy, allocates)
      * @param {THREE.Matrix4} threeMatrix
      * @returns {Float32Array|null}
      */
@@ -85,7 +260,7 @@ class WasmBridgeClass {
     }
 
     /**
-     * Compute normal matrix from a Three.js matrix
+     * Compute normal matrix from a Three.js matrix (legacy, allocates)
      * @param {THREE.Matrix4} threeMatrix
      * @returns {Float32Array|null}
      */
@@ -95,9 +270,7 @@ class WasmBridgeClass {
         return new Float32Array(this._matrix.get_normal_matrix());
     }
 
-    // ============================================
-    // Raycasting
-    // ============================================
+    // --- Raycasting ---
 
     /**
      * Create a BVH raycaster for a mesh
@@ -154,9 +327,7 @@ class WasmBridgeClass {
         this._raycasters.delete(id);
     }
 
-    // ============================================
-    // Texture Generation
-    // ============================================
+    // --- Texture Generation ---
 
     /**
      * Generate a tileable noise texture
