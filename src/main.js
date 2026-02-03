@@ -154,6 +154,13 @@ class App {
         this.animate();
     }
 
+    hideLoadingScreen() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.classList.add('hidden');
+        }
+    }
+
     requestRender() {
         if (!this.renderRequested) {
             this.renderRequested = true;
@@ -396,6 +403,10 @@ class App {
 
     onTouchStart(event) {
         if (!this.cajuModel || event.touches.length === 0) return;
+
+        // Don't intercept touches on UI elements (shader menu, etc.)
+        if (event.target.closest('.shader-menu')) return;
+
         this.cajuModel.unlockAudio();
         event.preventDefault();
         const touch = event.touches[0];
@@ -409,6 +420,10 @@ class App {
 
     onTouchMove(event) {
         if (!this.isDragging || !this.cajuModel || event.touches.length === 0) return;
+
+        // Don't intercept touches on UI elements
+        if (event.target.closest('.shader-menu')) return;
+
         event.preventDefault();
         const touch = event.touches[0];
         const ndc = normalizeMouseCoords(touch.clientX, touch.clientY);
@@ -418,6 +433,10 @@ class App {
 
     onTouchEnd(event) {
         if (!this.cajuModel) return;
+
+        // Don't intercept touches on UI elements (shader menu, etc.)
+        if (event.target.closest('.shader-menu')) return;
+
         event.preventDefault();
         if (this.isDragging) {
             this.camera.enableControls();
@@ -431,20 +450,32 @@ class App {
         this.performanceManager.update(deltaTime);
         this.camera.update();
 
+        // In low-power mode, throttle non-critical visual updates
+        const pm = this.performanceManager;
+
         if (this.info && this.cajuModel) {
             const attachPoint = this.cajuModel.getAttachmentPoint({ x: -0.0, y: -1.7, z: 0.3 });
             if (attachPoint) {
-                this.info.update(this.camera.getCamera(), deltaTime, attachPoint);
+                // String animation can be throttled
+                if (pm.shouldUpdate('string')) {
+                    this.info.update(this.camera.getCamera(), pm.getEffectiveDelta('string', deltaTime), attachPoint);
+                }
             }
         }
 
-        // Update arch texts
-        this.archTextTop?.update(this.camera.getCamera(), deltaTime);
-        this.archTextBottom?.update(this.camera.getCamera(), deltaTime);
+        // Update arch texts (per-letter animation can be throttled)
+        if (pm.shouldUpdate('archText')) {
+            const effectiveDelta = pm.getEffectiveDelta('archText', deltaTime);
+            this.archTextTop?.update(this.camera.getCamera(), effectiveDelta);
+            this.archTextBottom?.update(this.camera.getCamera(), effectiveDelta);
+        }
 
-        // Update floating signs
-        this.contactSign?.update(this.camera.getCamera(), deltaTime);
+        // Update floating signs (billboard can be throttled)
+        if (pm.shouldUpdate('billboards')) {
+            this.contactSign?.update(this.camera.getCamera(), pm.getEffectiveDelta('billboards', deltaTime));
+        }
 
+        // Core object updates (not throttled - includes Caju ripples)
         this.objects.forEach((obj) => obj.update?.(deltaTime));
 
         // Continuous render for animations
@@ -478,6 +509,7 @@ class App {
             if (now - this.loadingStartTime > CONFIG.LOADING_DURATION) {
                 this.isLoading = false;
                 this.renderer.freezeShadowMap();
+                this.hideLoadingScreen();
             } else {
                 this.needsRender = true;
             }

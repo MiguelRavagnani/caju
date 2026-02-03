@@ -47,6 +47,15 @@ export class Info {
         ];
         this._stringCurve = new THREE.CatmullRomCurve3(this._curvePoints);
 
+        // Pre-allocate curve sampling to avoid GC pressure
+        this._stringSegments = 32;
+        this._sampledPoints = [];
+        for (let i = 0; i <= this._stringSegments; i++) {
+            this._sampledPoints.push(new THREE.Vector3());
+        }
+        // Pre-allocate flat positions array for LineGeometry
+        this._flatPositions = new Float32Array((this._stringSegments + 1) * 3);
+
         this.loadModel(onLoad);
     }
 
@@ -189,15 +198,17 @@ export class Info {
         this._curvePoints[3].copy(this._controlPoint2);
         this._curvePoints[4].copy(this._endPos);
 
-        const points = this._stringCurve.getPoints(32);
-
-        // Convert to flat array for LineGeometry
-        const positions = [];
-        for (const p of points) {
-            positions.push(p.x, p.y, p.z);
+        // Sample curve into pre-allocated vectors (zero allocation)
+        for (let i = 0; i <= this._stringSegments; i++) {
+            const t = i / this._stringSegments;
+            this._stringCurve.getPoint(t, this._sampledPoints[i]);
+            const idx = i * 3;
+            this._flatPositions[idx] = this._sampledPoints[i].x;
+            this._flatPositions[idx + 1] = this._sampledPoints[i].y;
+            this._flatPositions[idx + 2] = this._sampledPoints[i].z;
         }
 
-        this.stringGeometry.setPositions(positions);
+        this.stringGeometry.setPositions(this._flatPositions);
         this.stringLine.computeLineDistances();
 
         // Animate dash offset

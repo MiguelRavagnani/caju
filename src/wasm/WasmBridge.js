@@ -5,6 +5,7 @@
  *   - MatrixComputer: Fast matrix inverse/normal computations
  *   - BVHRaycaster: Accelerated ray-mesh intersection
  *   - TextureGenerator: Pre-computed noise/LUT textures for shaders
+ *   - RippleSimulator: Physics-based vertex displacement for ripple effects
  *
  * Usage:
  *   import { WasmBridge } from './wasm/WasmBridge.js';
@@ -24,6 +25,7 @@ class WasmBridgeClass {
         this.initError = null;
         this._matrix = null;
         this._raycasters = new Map();
+        this._rippleSimulators = new Map();
         this._textureGen = null;
         // Zero-copy output views into WASM memory
         this._inverseView = null;
@@ -361,11 +363,112 @@ class WasmBridgeClass {
         return new Uint8Array(this._textureGen.generate_color_lut(size, contrast, saturation));
     }
 
+    // --- Ripple Physics ---
+
+    /**
+     * Create a ripple simulator for mesh vertex displacement
+     * @param {string} id - Unique identifier
+     * @param {number} vertexCount - Number of vertices in the mesh
+     * @returns {object|null} - The simulator instance
+     */
+    createRippleSimulator(id, vertexCount) {
+        if (!this.ready || !wasmModule?.RippleSimulator) return null;
+
+        try {
+            const simulator = new wasmModule.RippleSimulator(vertexCount);
+            this._rippleSimulators.set(id, simulator);
+            return simulator;
+        } catch (error) {
+            console.warn('[WASM] Failed to create ripple simulator:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Get an existing ripple simulator
+     * @param {string} id - Simulator ID
+     * @returns {object|null}
+     */
+    getRippleSimulator(id) {
+        return this._rippleSimulators.get(id) || null;
+    }
+
+    /**
+     * Add a ripple at world position
+     * @param {string} id - Simulator ID
+     * @param {THREE.Vector3} position - World position
+     * @param {number} strength - Ripple strength
+     * @param {boolean} isPull - true for pull effect, false for wave
+     * @returns {number} - Ripple index (for updating/releasing)
+     */
+    addRipple(id, position, strength, isPull = true) {
+        const simulator = this._rippleSimulators.get(id);
+        if (!simulator) return -1;
+        return simulator.add_ripple(position.x, position.y, position.z, strength, isPull);
+    }
+
+    /**
+     * Update ripple position (for drag interaction)
+     * @param {string} id - Simulator ID
+     * @param {number} rippleIndex - Index returned by addRipple
+     * @param {THREE.Vector3} position - New world position
+     */
+    updateRipplePosition(id, rippleIndex, position) {
+        const simulator = this._rippleSimulators.get(id);
+        if (!simulator) return;
+        simulator.update_ripple_position(rippleIndex, position.x, position.y, position.z);
+    }
+
+    /**
+     * Release a pull ripple (converts to propagating wave)
+     * @param {string} id - Simulator ID
+     * @param {number} rippleIndex - Index returned by addRipple
+     */
+    releaseRipple(id, rippleIndex) {
+        const simulator = this._rippleSimulators.get(id);
+        if (!simulator) return;
+        simulator.release_ripple(rippleIndex);
+    }
+
+    /**
+     * Simulate ripple physics and get vertex displacements
+     * @param {string} id - Simulator ID
+     * @param {number} deltaTime - Time since last frame (seconds)
+     * @param {Float32Array} positions - Vertex positions [x,y,z,...]
+     * @param {Float32Array} normals - Vertex normals [nx,ny,nz,...]
+     * @returns {Float32Array|null} - Displacement array [dx,dy,dz,...] or null
+     */
+    simulateRipples(id, deltaTime, positions, normals) {
+        const simulator = this._rippleSimulators.get(id);
+        if (!simulator) return null;
+        return new Float32Array(simulator.simulate(deltaTime, positions, normals));
+    }
+
+    /**
+     * Get ripple uniform data for shader
+     * @param {string} id - Simulator ID
+     * @returns {Float32Array|null} - Uniform data [pos.xyz, time, type, ...] per ripple
+     */
+    getRippleShaderUniforms(id) {
+        const simulator = this._rippleSimulators.get(id);
+        if (!simulator) return null;
+        return new Float32Array(simulator.get_shader_uniforms());
+    }
+
+    /**
+     * Dispose of a specific ripple simulator
+     * @param {string} id - Simulator ID
+     */
+    disposeRippleSimulator(id) {
+        this._rippleSimulators.delete(id);
+    }
+
     /**
      * Dispose all resources
      */
     dispose() {
         this._raycasters.clear();
+        this._rippleSimulators.clear();
         this._matrix = null;
         this._textureGen = null;
         this.ready = false;
