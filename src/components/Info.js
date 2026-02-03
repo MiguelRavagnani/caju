@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { CONFIG } from '../utils/Constants.js';
+import { AssetLoader } from '../utils/AssetLoader.js';
 import { Component } from './Component.js';
 
 export class Info extends Component {
@@ -56,55 +56,50 @@ export class Info extends Component {
         this.loadModel(onLoad);
     }
 
-    loadModel(onLoad) {
-        const loader = new GLTFLoader();
-        const textureLoader = new THREE.TextureLoader();
-
-        const baseColorMap = textureLoader.load(CONFIG.TEXTURE_PATHS.infoBaseColor);
-        const normalMap = textureLoader.load(CONFIG.TEXTURE_PATHS.infoNormal);
-        const ormMap = textureLoader.load(CONFIG.TEXTURE_PATHS.infoORM);
-
-        baseColorMap.colorSpace = THREE.SRGBColorSpace;
-        normalMap.colorSpace = THREE.LinearSRGBColorSpace;
-        ormMap.colorSpace = THREE.LinearSRGBColorSpace;
-
-        baseColorMap.flipY = false;
-        normalMap.flipY = false;
-        ormMap.flipY = false;
-
-        loader.load(CONFIG.MODEL_PATHS.info, (gltf) => {
-            this.mesh = gltf.scene;
-
-            this.mesh.traverse((child) => {
-                if (child.isMesh) {
-                    const material = new THREE.MeshStandardMaterial({
-                        map: baseColorMap,
-                        normalMap: normalMap,
-                        aoMap: ormMap,
-                        roughnessMap: ormMap,
-                        metalnessMap: ormMap,
-                        aoMapIntensity: 1.0,
-                        roughness: 1.0,
-                        metalness: 1.0
-                    });
-
-                    if (!child.geometry.attributes.uv2 && child.geometry.attributes.uv) {
-                        child.geometry.setAttribute('uv2', child.geometry.attributes.uv);
-                    }
-
-                    child.material = material;
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-
-            const { position, scale } = this.config;
-            this.mesh.position.set(position.x, position.y, position.z);
-            this.mesh.scale.setScalar(scale);
-
-            this.createString();
-            this._onLoad(onLoad);
+    async loadModel(onLoad) {
+        const assets = await AssetLoader.loadBatch({
+            textures: {
+                baseColor: { path: CONFIG.TEXTURE_PATHS.infoBaseColor, flipY: false },
+                normal: { path: CONFIG.TEXTURE_PATHS.infoNormal, colorSpace: THREE.LinearSRGBColorSpace, flipY: false },
+                orm: { path: CONFIG.TEXTURE_PATHS.infoORM, colorSpace: THREE.LinearSRGBColorSpace, flipY: false }
+            },
+            models: {
+                info: CONFIG.MODEL_PATHS.info
+            }
         });
+
+        const { baseColor, normal, orm } = assets.textures;
+        this.mesh = assets.models.info.scene;
+
+        this.mesh.traverse((child) => {
+            if (child.isMesh) {
+                const material = new THREE.MeshStandardMaterial({
+                    map: baseColor,
+                    normalMap: normal,
+                    aoMap: orm,
+                    roughnessMap: orm,
+                    metalnessMap: orm,
+                    aoMapIntensity: 1.0,
+                    roughness: 1.0,
+                    metalness: 1.0
+                });
+
+                if (!child.geometry.attributes.uv2 && child.geometry.attributes.uv) {
+                    child.geometry.setAttribute('uv2', child.geometry.attributes.uv);
+                }
+
+                child.material = material;
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+
+        const { position, scale } = this.config;
+        this.mesh.position.set(position.x, position.y, position.z);
+        this.mesh.scale.setScalar(scale);
+
+        this.createString();
+        this._onLoad(onLoad);
     }
 
     createString() {

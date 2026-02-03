@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createGlassShader } from '../shaders/glass/glassUniforms.js';
 import { createSSSShader } from '../shaders/sss/sssUniforms.js';
 import { CONFIG } from '../utils/Constants.js';
+import { AssetLoader } from '../utils/AssetLoader.js';
 import { WasmBridge } from '../wasm/WasmBridge.js';
 import { Component } from './Component.js';
 
@@ -38,45 +38,43 @@ export class Caju extends Component {
         this._loadModel();
     }
 
-    _loadModel() {
-        const textureLoader = new THREE.TextureLoader();
+    async _loadModel() {
         const loadAllTextures = !this.config.reducedTextures;
 
-        const baseColor = textureLoader.load(CONFIG.TEXTURE_PATHS.cajuBaseColor);
-        baseColor.colorSpace = THREE.SRGBColorSpace;
-        baseColor.flipY = false;
+        // Build asset manifest
+        const manifest = {
+            textures: {
+                baseColor: { path: CONFIG.TEXTURE_PATHS.cajuBaseColor, flipY: false }
+            },
+            models: {
+                caju: CONFIG.MODEL_PATHS.caju
+            }
+        };
 
-        const normal = loadAllTextures
-            ? this._loadTexture(textureLoader, CONFIG.TEXTURE_PATHS.cajuNormal)
-            : null;
-        const orm = loadAllTextures
-            ? this._loadTexture(textureLoader, CONFIG.TEXTURE_PATHS.cajuORM)
-            : null;
+        if (loadAllTextures) {
+            manifest.textures.normal = { path: CONFIG.TEXTURE_PATHS.cajuNormal, colorSpace: THREE.LinearSRGBColorSpace, flipY: false };
+            manifest.textures.orm = { path: CONFIG.TEXTURE_PATHS.cajuORM, colorSpace: THREE.LinearSRGBColorSpace, flipY: false };
+        }
 
-        new GLTFLoader().load(CONFIG.MODEL_PATHS.caju, (gltf) => {
-            this.mesh = gltf.scene;
-            this.mesh.rotation.y = Math.PI;
+        const assets = await AssetLoader.loadBatch(manifest);
+        const { baseColor, normal, orm } = assets.textures;
 
-            this.mesh.traverse((child) => {
-                if (!child.isMesh) return;
+        this.mesh = assets.models.caju.scene;
+        this.mesh.rotation.y = Math.PI;
 
-                this._ensureUV2(child);
+        this.mesh.traverse((child) => {
+            if (!child.isMesh) return;
 
-                if (child.name === 'eye_2') {
-                    this._setupGlassEye(child);
-                } else {
-                    this._setupBodyMaterial(child, baseColor, normal, orm);
-                }
-            });
+            this._ensureUV2(child);
 
-            this._onLoad(this.onLoadCallback);
+            if (child.name === 'eye_2') {
+                this._setupGlassEye(child);
+            } else {
+                this._setupBodyMaterial(child, baseColor, normal, orm);
+            }
         });
-    }
 
-    _loadTexture(loader, path) {
-        const tex = loader.load(path);
-        tex.flipY = false;
-        return tex;
+        this._onLoad(this.onLoadCallback);
     }
 
     _ensureUV2(mesh) {
