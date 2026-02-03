@@ -375,7 +375,7 @@ class WasmBridgeClass {
         if (!this.ready || !wasmModule?.RippleSimulator) return null;
 
         try {
-            const simulator = new wasmModule.RippleSimulator(vertexCount);
+            const simulator = new wasmModule.RippleSimulator();
             this._rippleSimulators.set(id, simulator);
             return simulator;
         } catch (error) {
@@ -394,65 +394,43 @@ class WasmBridgeClass {
     }
 
     /**
-     * Add a ripple at world position
+     * Add a ripple at world position (state-only, WASM manages lifecycle)
      * @param {string} id - Simulator ID
      * @param {THREE.Vector3} position - World position
-     * @param {number} strength - Ripple strength
-     * @param {boolean} isPull - true for pull effect, false for wave
-     * @returns {number} - Ripple index (for updating/releasing)
+     * @param {number} amplitude - Wave height magnitude (e.g., 0.5)
+     * @param {number} speed - Propagation speed (e.g., 5.0)
+     * @param {number} decay - Amplitude decay per frame (e.g., 0.95)
+     * @param {RippleType} rippleType - RippleType.Wave (0) or RippleType.Pull (1)
+     * @returns {void}
      */
-    addRipple(id, position, strength, isPull = true) {
-        const simulator = this._rippleSimulators.get(id);
-        if (!simulator) return -1;
-        return simulator.add_ripple(position.x, position.y, position.z, strength, isPull);
-    }
-
-    /**
-     * Update ripple position (for drag interaction)
-     * @param {string} id - Simulator ID
-     * @param {number} rippleIndex - Index returned by addRipple
-     * @param {THREE.Vector3} position - New world position
-     */
-    updateRipplePosition(id, rippleIndex, position) {
+    addRipple(id, position, amplitude, speed, decay, rippleType = 0) {
         const simulator = this._rippleSimulators.get(id);
         if (!simulator) return;
-        simulator.update_ripple_position(rippleIndex, position.x, position.y, position.z);
+        simulator.add_ripple(position.x, position.y, position.z, amplitude, speed, decay, rippleType);
     }
 
     /**
-     * Release a pull ripple (converts to propagating wave)
+     * Update ripple simulator physics (call once per frame)
      * @param {string} id - Simulator ID
-     * @param {number} rippleIndex - Index returned by addRipple
+     * @param {number} deltaTime - Time delta in seconds
+     * @returns {void}
      */
-    releaseRipple(id, rippleIndex) {
+    updateRipples(id, deltaTime) {
         const simulator = this._rippleSimulators.get(id);
         if (!simulator) return;
-        simulator.release_ripple(rippleIndex);
+        simulator.update(deltaTime);
     }
 
     /**
-     * Simulate ripple physics and get vertex displacements
+     * Get ripple uniform data for GPU shader (state-only)
+     * Returns flat array: [pos.x, pos.y, pos.z, radius, amplitude, phase, type, active] per ripple
      * @param {string} id - Simulator ID
-     * @param {number} deltaTime - Time since last frame (seconds)
-     * @param {Float32Array} positions - Vertex positions [x,y,z,...]
-     * @param {Float32Array} normals - Vertex normals [nx,ny,nz,...]
-     * @returns {Float32Array|null} - Displacement array [dx,dy,dz,...] or null
+     * @returns {Float32Array|null} - Uniform data for shader
      */
-    simulateRipples(id, deltaTime, positions, normals) {
+    getRippleUniforms(id) {
         const simulator = this._rippleSimulators.get(id);
         if (!simulator) return null;
-        return new Float32Array(simulator.simulate(deltaTime, positions, normals));
-    }
-
-    /**
-     * Get ripple uniform data for shader
-     * @param {string} id - Simulator ID
-     * @returns {Float32Array|null} - Uniform data [pos.xyz, time, type, ...] per ripple
-     */
-    getRippleShaderUniforms(id) {
-        const simulator = this._rippleSimulators.get(id);
-        if (!simulator) return null;
-        return new Float32Array(simulator.get_shader_uniforms());
+        return new Float32Array(simulator.get_uniforms());
     }
 
     /**

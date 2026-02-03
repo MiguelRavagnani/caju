@@ -136,7 +136,15 @@ class App {
 
         this.interactionManager = new InteractionManager(
             this.camera.getCamera(),
-            this.objects.map((obj) => obj.getMesh())
+            this.objects.map((obj) => obj.getMesh()),
+            {
+                onHit: (hit) => {
+                    if (hit.object === this.cajuModel?.getMesh()) {
+                        this.cajuModel?.handleClick(hit.point, this.camera.getCamera());
+                        this.requestRender();
+                    }
+                }
+            }
         );
 
         this.setupEventListeners();

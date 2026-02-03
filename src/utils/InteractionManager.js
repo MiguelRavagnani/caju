@@ -1,38 +1,34 @@
-import * as THREE from 'three';
+import { normalizeMouseCoords } from './Constants.js';
+import { HybridRaycaster } from './HybridRaycaster.js';
 
+/**
+ * Manages click interactions on 3D objects
+ */
 export class InteractionManager {
-    constructor(camera, objects = []) {
+    /**
+     * @param {THREE.Camera} camera
+     * @param {THREE.Object3D[]} objects - Objects to test for hits
+     * @param {Object} options
+     * @param {Function} [options.onHit] - Callback when object is clicked: (hit) => void
+     * @param {string} [options.raycasterId] - WASM raycaster ID (default: 'caju')
+     */
+    constructor(camera, objects = [], { onHit = null, raycasterId = 'caju' } = {}) {
         this.camera = camera;
         this.objects = objects;
-        this.raycaster = new THREE.Raycaster();
-        this.mouse = new THREE.Vector2();
+        this.onHit = onHit;
+        this._raycaster = new HybridRaycaster(raycasterId);
 
-        this.setupEventListeners();
+        this._onClick = this._onClick.bind(this);
+        window.addEventListener('click', this._onClick);
     }
 
-    setupEventListeners() {
-        window.addEventListener('click', this.onMouseClick.bind(this));
-    }
+    _onClick(event) {
+        const ndc = normalizeMouseCoords(event.clientX, event.clientY);
+        const hit = this._raycaster.cast(this.camera, this.objects, ndc);
 
-    onMouseClick(event) {
-        // Calculate mouse position in normalized device coordinates
-        this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-        // Update the raycaster
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-
-        // Check for intersections
-        const intersects = this.raycaster.intersectObjects(this.objects);
-
-        if (intersects.length > 0) {
-            const clickedObject = intersects[0].object;
-            this.onObjectClick(clickedObject);
+        if (hit && this.onHit) {
+            this.onHit(hit);
         }
-    }
-
-    onObjectClick() {
-        // Placeholder for click interactions
     }
 
     addObject(object) {
@@ -47,6 +43,6 @@ export class InteractionManager {
     }
 
     dispose() {
-        window.removeEventListener('click', this.onMouseClick.bind(this));
+        window.removeEventListener('click', this._onClick);
     }
 }
