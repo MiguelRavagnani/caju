@@ -71,7 +71,11 @@ export default defineConfig({
   },
   server: {
     port: 8000,
-    open: true
+    open: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
   },
   optimizeDeps: {
     exclude: ['caju-wasm'],
