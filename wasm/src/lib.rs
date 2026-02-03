@@ -11,14 +11,6 @@ pub use raycast::BVHRaycaster;
 pub use ripple_physics::RippleSimulator;
 pub use texture_gen::TextureGenerator;
 
-// Modules available for future use (not exported to reduce WASM size)
-#[allow(dead_code)]
-mod animation;
-#[allow(dead_code)]
-mod audio_dsp;
-#[allow(dead_code)]
-mod geometry;
-
 #[wasm_bindgen(start)]
 pub fn init() {
     // WASM module initialization
