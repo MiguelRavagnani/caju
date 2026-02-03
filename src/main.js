@@ -252,15 +252,15 @@ class App {
         let x, y, z, scale, rotationOffset;
 
         if (isMobileLayout || isPortrait) {
-            scale = 0.7;
+            scale = CONFIG.LAYOUT.MOBILE_SCALE;
             x = -width * 0.0;
-            y = height * 1.7;
-            z = -depth * 0.7;
+            y = height * CONFIG.LAYOUT.INFO_MOBILE_Y;
+            z = -depth * CONFIG.LAYOUT.MOBILE_SCALE;
             rotationOffset = { x: 0.1, y: -0.4, z: -0.1 };
         } else {
-            scale = 1.0;
-            x = -width * 0.8;
-            y = height * 1.3;
+            scale = CONFIG.LAYOUT.DESKTOP_SCALE;
+            x = -width * CONFIG.LAYOUT.INFO_DESKTOP_X;
+            y = height * CONFIG.LAYOUT.INFO_DESKTOP_Y;
             z = -depth;
             rotationOffset = { x: 0.5, y: 0.3, z: 0.14 };
         }
@@ -337,25 +337,25 @@ class App {
 
         this.archTextTop = new ArchText(this.scene.getScene(), 'Olá, sou a', {
             ...topConfig,
-            archStartAngle: Math.PI * 0.61,
-            archEndAngle: Math.PI * 0.0,
+            archStartAngle: CONFIG.ARCH_TEXT.TOP.archStartAngle,
+            archEndAngle: CONFIG.ARCH_TEXT.TOP.archEndAngle,
             archCenter: { x: 0, y: 0, z: 0 },
-            neonColor: '#c96bff',
+            neonColor: CONFIG.NEON.ARCH_TOP_COLOR,
             floatAmount: isMobileLayout ? 0.02 : 0.04,
             wobbleAmount: isMobileLayout ? 0.01 : 0.02,
-            letterSpacing: 0.8,
+            letterSpacing: CONFIG.ARCH_TEXT.TOP.letterSpacing,
             flickerEnabled: !isMobileLayout
         });
 
         this.archTextBottom = new ArchText(this.scene.getScene(), 'CAJU', {
             ...bottomConfig,
-            archStartAngle: Math.PI * 0.67,
-            archEndAngle: Math.PI * -0.01,
+            archStartAngle: CONFIG.ARCH_TEXT.BOTTOM.archStartAngle,
+            archEndAngle: CONFIG.ARCH_TEXT.BOTTOM.archEndAngle,
             archCenter: { x: 0, y: 0, z: 0 },
-            neonColor: '#ffab4a',
+            neonColor: CONFIG.NEON.ARCH_BOTTOM_COLOR,
             floatAmount: isMobileLayout ? 0.015 : 0.03,
             wobbleAmount: isMobileLayout ? 0.01 : 0.025,
-            letterSpacing: 0.5,
+            letterSpacing: CONFIG.ARCH_TEXT.BOTTOM.letterSpacing,
             flickerEnabled: !isMobileLayout
         });
     }

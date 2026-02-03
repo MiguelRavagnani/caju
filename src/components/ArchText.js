@@ -14,14 +14,14 @@ export class ArchText extends Component {
             tubeRadius: config.tubeRadius || 0.03,
             curveResolution: config.curveResolution || 30,
             tubeSegments: config.tubeSegments || 8,
-            floatAmount: config.floatAmount || 0.05,
+            floatAmount: config.floatAmount || CONFIG.ANIMATION.FLOAT_AMOUNT,
             floatSpeed: config.floatSpeed || 1.5,
-            wobbleAmount: config.wobbleAmount || 0.03,
-            wobbleSpeed: config.wobbleSpeed || 2.0,
+            wobbleAmount: config.wobbleAmount || CONFIG.ANIMATION.WOBBLE_AMOUNT,
+            wobbleSpeed: config.wobbleSpeed || CONFIG.ANIMATION.WOBBLE_SPEED,
             letterSpacing: config.letterSpacing ?? 1.0,
             flickerEnabled: config.flickerEnabled ?? true,
-            neonColor: config.neonColor || '#ff6b9d',
-            emissiveIntensity: config.emissiveIntensity || 2.0,
+            neonColor: config.neonColor || CONFIG.NEON.DEFAULT_COLOR,
+            emissiveIntensity: config.emissiveIntensity || CONFIG.NEON.EMISSIVE_INTENSITY,
             position: config.position || { x: 0, y: 0, z: 0 }
         });
 
@@ -55,7 +55,7 @@ export class ArchText extends Component {
     _loadFont() {
         const loader = new FontLoader();
         loader.load(
-            '/fonts/Roboto_Regular.typeface.json',
+            CONFIG.FONT_PATHS.roboto,
             (font) => {
                 this.font = font;
                 if (this.pendingText) this.generateText(this.pendingText);
@@ -224,7 +224,7 @@ export class ArchText extends Component {
 
         // Neon flicker
         if (this.config.flickerEnabled) {
-            const flicker = 1 + Math.sin(this.time * 25) * 0.02 + Math.random() * 0.015;
+            const flicker = 1 + Math.sin(this.time * CONFIG.NEON.FLICKER_SPEED) * CONFIG.NEON.FLICKER_AMOUNT + Math.random() * 0.015;
             this.material.emissiveIntensity = this.config.emissiveIntensity * flicker;
         }
     }

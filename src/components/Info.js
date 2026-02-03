@@ -11,14 +11,14 @@ export class Info extends Component {
         super({
             position: config.position || { x: 0, y: 3, z: 0 },
             scale: config.scale || 1.0,
-            floatAmount: config.floatAmount || 0.05,
-            floatSpeed: config.floatSpeed || 0.5,
+            floatAmount: config.floatAmount || CONFIG.ANIMATION.FLOAT_AMOUNT,
+            floatSpeed: config.floatSpeed || CONFIG.ANIMATION.FLOAT_SPEED,
             rotationAmount: config.rotationAmount || 0.02,
             rotationOffset: config.rotationOffset || { x: 0.2, y: -0.7, z: -0.2 },
             attachPoint: config.attachPoint || { x: 0, y: 2, z: 0 },
             stringColor: config.stringColor || '#41384b',
             stringSag: config.stringSag || 1.0,
-            rotationLag: config.rotationLag || 0.03,
+            rotationLag: config.rotationLag || CONFIG.ANIMATION.ROTATION_LAG,
             stringWidth: config.stringWidth || 4
         });
 

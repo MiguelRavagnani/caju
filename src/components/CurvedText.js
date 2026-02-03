@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { CONFIG } from '../utils/Constants.js';
 import { Component } from './Component.js';
 
 const NEON_BEHAVIOR = {
@@ -17,7 +18,7 @@ export class CurvedText extends Component {
             alwaysOn: config.alwaysOn !== false,
             clickable: config.clickable || false,
             onClick: config.onClick || null,
-            neonColor: config.neonColor || '#ff6b9d',
+            neonColor: config.neonColor || CONFIG.NEON.DEFAULT_COLOR,
             focusZ: config.focusZ ?? 2,
             ...config
         });
@@ -93,7 +94,7 @@ export class CurvedText extends Component {
     _loadFont() {
         const loader = new FontLoader();
         loader.load(
-            'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json',
+            CONFIG.FONT_PATHS.helvetiker,
             (font) => {
                 this.font = font;
                 if (this.pendingText) {

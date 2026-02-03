@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { CONFIG } from '../utils/Constants.js';
 
 export class MainScene {
     constructor() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color('#7a668a');
+        this.scene.background = new THREE.Color(CONFIG.LIGHTING.BACKGROUND_COLOR);
 
         this.setupLighting();
         this.loadHDRI();
@@ -13,7 +14,10 @@ export class MainScene {
 
     setupLighting() {
         // Main directional light (like sun)
-        const directionalLight = new THREE.DirectionalLight('#fffdf2', 2.0);
+        const directionalLight = new THREE.DirectionalLight(
+            CONFIG.LIGHTING.DIRECTIONAL_COLOR,
+            CONFIG.LIGHTING.DIRECTIONAL_INTENSITY
+        );
         directionalLight.position.set(5, 10, 7.5);
         directionalLight.castShadow = true;
         directionalLight.matrixAutoUpdate = false;
@@ -21,7 +25,10 @@ export class MainScene {
         this.scene.add(directionalLight);
 
         // Fill light from opposite side
-        const fillLight = new THREE.DirectionalLight('#197dff', 3.3);
+        const fillLight = new THREE.DirectionalLight(
+            CONFIG.LIGHTING.FILL_COLOR,
+            CONFIG.LIGHTING.FILL_INTENSITY
+        );
         fillLight.position.set(-5, 5, -5);
         fillLight.matrixAutoUpdate = false;
         fillLight.updateMatrix();
