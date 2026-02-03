@@ -4,12 +4,11 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { CONFIG } from '../utils/Constants.js';
+import { Component } from './Component.js';
 
-export class Info {
+export class Info extends Component {
     constructor(onLoad, config = {}) {
-        this.mesh = null;
-        this.time = 0;
-        this.config = {
+        super({
             position: config.position || { x: 0, y: 3, z: 0 },
             scale: config.scale || 1.0,
             floatAmount: config.floatAmount || 0.05,
@@ -21,18 +20,17 @@ export class Info {
             stringSag: config.stringSag || 1.0,
             rotationLag: config.rotationLag || 0.03,
             stringWidth: config.stringWidth || 4
-        };
+        });
+
+        this.enableBillboard(this.config.rotationLag);
 
         // String/line properties
         this.stringLine = null;
         this.stringMaterial = null;
+        this.stringGeometry = null;
         this.targetPosition = new THREE.Vector3();
 
-        // For smooth delayed rotation
-        this.currentQuaternion = new THREE.Quaternion();
-        this.targetQuaternion = new THREE.Quaternion();
-        this.lookAtHelper = new THREE.Object3D();
-        
+        // Pre-allocated vectors for string curve (zero GC)
         this._startPos = new THREE.Vector3();
         this._endPos = new THREE.Vector3();
         this._midPoint = new THREE.Vector3();
@@ -47,13 +45,12 @@ export class Info {
         ];
         this._stringCurve = new THREE.CatmullRomCurve3(this._curvePoints);
 
-        // Pre-allocate curve sampling to avoid GC pressure
+        // Pre-allocate curve sampling
         this._stringSegments = 32;
         this._sampledPoints = [];
         for (let i = 0; i <= this._stringSegments; i++) {
             this._sampledPoints.push(new THREE.Vector3());
         }
-        // Pre-allocate flat positions array for LineGeometry
         this._flatPositions = new Float32Array((this._stringSegments + 1) * 3);
 
         this.loadModel(onLoad);
@@ -101,23 +98,16 @@ export class Info {
                 }
             });
 
-            this.mesh.position.set(
-                this.config.position.x,
-                this.config.position.y,
-                this.config.position.z
-            );
-            this.mesh.scale.setScalar(this.config.scale);
+            const { position, scale } = this.config;
+            this.mesh.position.set(position.x, position.y, position.z);
+            this.mesh.scale.setScalar(scale);
 
             this.createString();
-
-            if (onLoad) {
-                onLoad(this);
-            }
+            this._onLoad(onLoad);
         });
     }
 
     createString() {
-        // Line2 material supports actual line width
         this.stringMaterial = new LineMaterial({
             color: this.config.stringColor,
             linewidth: this.config.stringWidth,
@@ -127,7 +117,6 @@ export class Info {
             resolution: new THREE.Vector2(window.innerWidth, window.innerHeight)
         });
 
-        // Create initial geometry
         this.stringGeometry = new LineGeometry();
         this.stringGeometry.setPositions([0, 0, 0, 0, -1, 0, 0, -2, 0]);
 
@@ -143,33 +132,17 @@ export class Info {
         this.targetPosition.set(position.x, position.y, position.z);
     }
 
-    getMesh() {
-        return this.mesh;
-    }
-
     update(camera, deltaTime = 0.016, targetPosition = null) {
+        super.update(camera, deltaTime);
         if (!this.mesh) return;
 
-        this.time += deltaTime;
+        this.updateBillboard(camera);
 
-        // Billboard with staggered/delayed rotation
-        if (camera) {
-            this.lookAtHelper.position.copy(this.mesh.position);
-            this.lookAtHelper.lookAt(camera.position);
-            this.targetQuaternion.copy(this.lookAtHelper.quaternion);
-
-            this.currentQuaternion.copy(this.mesh.quaternion);
-            this.currentQuaternion.slerp(this.targetQuaternion, this.config.rotationLag);
-            this.mesh.quaternion.copy(this.currentQuaternion);
-        }
-
-        // Update target position if provided
         if (targetPosition) {
             this.targetPosition.set(targetPosition.x, targetPosition.y, targetPosition.z);
         }
 
-        // Update the string curve
-        if (this.stringLine && this.mesh) {
+        if (this.stringLine) {
             this.updateString();
         }
     }
@@ -178,7 +151,7 @@ export class Info {
         this._startPos.copy(this.mesh.position);
         this._endPos.copy(this.targetPosition);
 
-        // Calculate midpoint with sag (catenary-like curve)
+        // Catenary-like curve with sag
         this._midPoint.lerpVectors(this._startPos, this._endPos, 0.5);
         const distance = this._startPos.distanceTo(this._endPos);
         const sag = this.config.stringSag * (distance / 5);
@@ -191,14 +164,14 @@ export class Info {
         this._controlPoint2.lerpVectors(this._midPoint, this._endPos, 0.5);
         this._controlPoint2.y -= sag * 0.3;
 
-        // Update curve points in place (avoid recreating CatmullRomCurve3)
+        // Update curve points in place
         this._curvePoints[0].copy(this._startPos);
         this._curvePoints[1].copy(this._controlPoint1);
         this._curvePoints[2].copy(this._midPoint);
         this._curvePoints[3].copy(this._controlPoint2);
         this._curvePoints[4].copy(this._endPos);
 
-        // Sample curve into pre-allocated vectors (zero allocation)
+        // Sample curve (zero allocation)
         for (let i = 0; i <= this._stringSegments; i++) {
             const t = i / this._stringSegments;
             this._stringCurve.getPoint(t, this._sampledPoints[i]);
@@ -222,22 +195,7 @@ export class Info {
     }
 
     dispose() {
-        if (this.mesh) {
-            this.mesh.traverse((child) => {
-                if (child.isMesh) {
-                    child.geometry.dispose();
-                    if (child.material) {
-                        for (const key of Object.keys(child.material)) {
-                            const value = child.material[key];
-                            if (value && value.isTexture) {
-                                value.dispose();
-                            }
-                        }
-                        child.material.dispose();
-                    }
-                }
-            });
-        }
+        super.dispose();
 
         if (this.stringLine) {
             this.stringGeometry.dispose();

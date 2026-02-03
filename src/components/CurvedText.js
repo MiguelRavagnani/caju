@@ -1,53 +1,56 @@
 import * as THREE from 'three';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { Component } from './Component.js';
 
-// Neon behavior types
 const NEON_BEHAVIOR = {
-    STABLE: 'stable', // No flicker, calm glow
-    PULSE: 'pulse', // Slow heartbeat pulse
-    FLICKER: 'flicker' // Traditional neon flicker
+    STABLE: 'stable',
+    PULSE: 'pulse',
+    FLICKER: 'flicker'
 };
 
-export class CurvedText {
+export class CurvedText extends Component {
     constructor(scene, text = '', config = {}) {
+        super({
+            position: config.position || { x: 0, y: 0, z: 0 },
+            behavior: config.behavior || NEON_BEHAVIOR.FLICKER,
+            pulseSpeed: config.pulseSpeed || 3.0,
+            alwaysOn: config.alwaysOn !== false,
+            clickable: config.clickable || false,
+            onClick: config.onClick || null,
+            neonColor: config.neonColor || '#ff6b9d',
+            focusZ: config.focusZ ?? 2,
+            ...config
+        });
+
         this.scene = scene;
-        this.group = new THREE.Group();
+        this.mesh = new THREE.Group(); // Group acts as mesh
         this.font = null;
         this.letterMeshes = [];
         this.frame = null;
-        this.time = 0;
+        this.background = null;
+        this.hitBox = null;
         this.pendingText = text;
-        this.config = config;
 
-        // Neon behavior configuration
-        this.behavior = config.behavior || NEON_BEHAVIOR.FLICKER;
-        this.pulseSpeed = config.pulseSpeed || 3.0; // For pulse behavior
-        this.alwaysOn = config.alwaysOn !== false; // Default to always on for visibility
-        this.clickable = config.clickable || false;
-        this.onClick = config.onClick || null;
+        // Neon colors
+        this.neonColor = new THREE.Color(this.config.neonColor);
+        this.offColor = this._createOffColor(this.neonColor);
 
-        // Neon colors - derive off color from neon color
-        this.neonColor = new THREE.Color(config.neonColor || '#ff6b9d');
-        this.offColor = this.createOffColor(this.neonColor);
-
-        // Neon material - starts based on alwaysOn setting
+        // Materials
         this.material = new THREE.MeshStandardMaterial({
-            color: this.alwaysOn ? this.neonColor : this.offColor,
-            emissive: this.alwaysOn ? this.neonColor : this.offColor,
-            emissiveIntensity: this.alwaysOn ? 2.0 : 0.1,
+            color: this.config.alwaysOn ? this.neonColor : this.offColor,
+            emissive: this.config.alwaysOn ? this.neonColor : this.offColor,
+            emissiveIntensity: this.config.alwaysOn ? 2.0 : 0.1,
             metalness: 0.3,
             roughness: 0.4
         });
 
         const bgTint = this.neonColor.clone().multiplyScalar(0.15);
-        // Frame material
         this.frameMaterial = new THREE.MeshStandardMaterial({
             color: new THREE.Color('#5e5e5e').add(bgTint),
             metalness: 0.9,
             roughness: 0.2
         });
 
-        // Background material - slightly tinted by neon color
         this.backgroundMaterial = new THREE.MeshStandardMaterial({
             color: new THREE.Color('#5e5e5e').add(bgTint),
             metalness: 0.1,
@@ -57,47 +60,38 @@ export class CurvedText {
             side: THREE.DoubleSide
         });
 
-        this.background = null;
-
         // Glow state
-        this.isLit = this.alwaysOn;
-        this.targetGlow = this.alwaysOn ? 1 : 0;
-        this.currentGlow = this.alwaysOn ? 1 : 0;
+        this.isLit = this.config.alwaysOn;
+        this.targetGlow = this.config.alwaysOn ? 1 : 0;
+        this.currentGlow = this.config.alwaysOn ? 1 : 0;
         this.glowSpeed = 5;
 
         // Interaction
         this.raycaster = new THREE.Raycaster();
-        this.hitBox = null;
         this.isHovered = false;
 
-        // Position
-        this.position = {
-            x: config.position?.x ?? 0,
-            y: config.position?.y ?? 0,
-            z: config.position?.z ?? 0
-        };
-
-        // Animation state for focus/expand
+        // Focus animation
         this.isFocused = false;
-        this.focusZ = config.focusZ ?? 2; // Z position when focused
-        this.originalZ = this.position.z;
+        this.originalZ = this.config.position.z;
 
-        this.group.position.set(this.position.x, this.position.y, this.position.z);
+        this.mesh.position.set(
+            this.config.position.x,
+            this.config.position.y,
+            this.config.position.z
+        );
 
-        this.loadFont();
-        scene.add(this.group);
+        this._loadFont();
+        scene.add(this.mesh);
     }
 
-    // Create a dim "off" version of the neon color
-    createOffColor(neonColor) {
+    _createOffColor(neonColor) {
         const hsl = {};
         neonColor.getHSL(hsl);
         return new THREE.Color().setHSL(hsl.h, hsl.s * 0.3, hsl.l * 0.15);
     }
 
-    loadFont() {
+    _loadFont() {
         const loader = new FontLoader();
-        // Helvetiker from Three.js examples - reliable, clean sans-serif
         loader.load(
             'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json',
             (font) => {
@@ -105,11 +99,10 @@ export class CurvedText {
                 if (this.pendingText) {
                     this.generateText(this.pendingText, this.config);
                 }
+                this._onLoad();
             },
             undefined,
-            (error) => {
-                console.error('Font loading failed:', error);
-            }
+            (error) => console.error('Font loading failed:', error)
         );
     }
 
@@ -132,8 +125,7 @@ export class CurvedText {
         this.floatSpeed = floatSpeed;
 
         let currentX = 0;
-        let minY = Infinity,
-            maxY = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
 
         for (let i = 0; i < text.length; i++) {
             const char = text[i];
@@ -145,14 +137,12 @@ export class CurvedText {
 
             const shapes = this.font.generateShapes(char, letterSize);
             const letterGroup = new THREE.Group();
-
-            // Higher resolution for smoother curves
             const curveResolution = 40;
 
             shapes.forEach((shape) => {
                 const shapePoints = shape.getPoints(curveResolution);
                 if (shapePoints.length >= 2) {
-                    const tubeMesh = this.createTubeFromPoints(shapePoints, tubeRadius);
+                    const tubeMesh = this._createTubeFromPoints(shapePoints, tubeRadius);
                     if (tubeMesh) letterGroup.add(tubeMesh);
                 }
 
@@ -160,7 +150,7 @@ export class CurvedText {
                     shape.holes.forEach((hole) => {
                         const holePoints = hole.getPoints(curveResolution);
                         if (holePoints.length >= 2) {
-                            const holeTubeMesh = this.createTubeFromPoints(holePoints, tubeRadius);
+                            const holeTubeMesh = this._createTubeFromPoints(holePoints, tubeRadius);
                             if (holeTubeMesh) letterGroup.add(holeTubeMesh);
                         }
                     });
@@ -179,7 +169,6 @@ export class CurvedText {
             letterGroup.position.x = currentX;
             currentX += size.x + letterSpacing;
 
-            // Track bounds for frame
             const letterBox = new THREE.Box3().setFromObject(letterGroup);
             minY = Math.min(minY, letterBox.min.y);
             maxY = Math.max(maxY, letterBox.max.y);
@@ -192,7 +181,7 @@ export class CurvedText {
             };
 
             this.letterMeshes.push(letterGroup);
-            this.group.add(letterGroup);
+            this.mesh.add(letterGroup);
         }
 
         // Center text
@@ -205,25 +194,21 @@ export class CurvedText {
         // Create frame and background
         const frameWidth = totalWidth + framePadding * 2;
         const frameHeight = maxY - minY + framePadding * 2;
-        this.createBackground(frameWidth, frameHeight);
-        this.createFrame(frameWidth, frameHeight, frameThickness);
+        this._createBackground(frameWidth, frameHeight);
+        this._createFrame(frameWidth, frameHeight, frameThickness);
 
-        // Create invisible hitbox for interaction
+        // Hitbox for interaction
         const hitBoxGeometry = new THREE.PlaneGeometry(frameWidth + 0.1, frameHeight + 0.1);
-        const hitBoxMaterial = new THREE.MeshBasicMaterial({
-            visible: false,
-            side: THREE.DoubleSide
-        });
+        const hitBoxMaterial = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
         this.hitBox = new THREE.Mesh(hitBoxGeometry, hitBoxMaterial);
         this.hitBox.position.z = 0.01;
-        this.group.add(this.hitBox);
+        this.mesh.add(this.hitBox);
     }
 
-    createBackground(width, height) {
+    _createBackground(width, height) {
         const cornerRadius = 0.05;
         const shape = new THREE.Shape();
 
-        // Rounded rectangle shape
         shape.moveTo(-width / 2 + cornerRadius, -height / 2);
         shape.lineTo(width / 2 - cornerRadius, -height / 2);
         shape.quadraticCurveTo(width / 2, -height / 2, width / 2, -height / 2 + cornerRadius);
@@ -237,104 +222,69 @@ export class CurvedText {
         const geometry = new THREE.ShapeGeometry(shape);
         this.background = new THREE.Mesh(geometry, this.backgroundMaterial);
         this.background.position.z = -0.02;
-        this.group.add(this.background);
+        this.mesh.add(this.background);
     }
 
-    createFrame(width, height, thickness) {
+    _createFrame(width, height, thickness) {
         const frameGroup = new THREE.Group();
-
-        // Frame corners and edges using tubes
         const halfW = width / 2;
         const halfH = height / 2;
         const cornerRadius = thickness * 2;
 
-        // Create rounded rectangle path
         const framePath = new THREE.CurvePath();
 
-        // Top edge
-        framePath.add(
-            new THREE.LineCurve3(
-                new THREE.Vector3(-halfW + cornerRadius, halfH, 0),
-                new THREE.Vector3(halfW - cornerRadius, halfH, 0)
-            )
-        );
-
-        // Top-right corner
-        framePath.add(
-            new THREE.QuadraticBezierCurve3(
-                new THREE.Vector3(halfW - cornerRadius, halfH, 0),
-                new THREE.Vector3(halfW, halfH, 0),
-                new THREE.Vector3(halfW, halfH - cornerRadius, 0)
-            )
-        );
-
-        // Right edge
-        framePath.add(
-            new THREE.LineCurve3(
-                new THREE.Vector3(halfW, halfH - cornerRadius, 0),
-                new THREE.Vector3(halfW, -halfH + cornerRadius, 0)
-            )
-        );
-
-        // Bottom-right corner
-        framePath.add(
-            new THREE.QuadraticBezierCurve3(
-                new THREE.Vector3(halfW, -halfH + cornerRadius, 0),
-                new THREE.Vector3(halfW, -halfH, 0),
-                new THREE.Vector3(halfW - cornerRadius, -halfH, 0)
-            )
-        );
-
-        // Bottom edge
-        framePath.add(
-            new THREE.LineCurve3(
-                new THREE.Vector3(halfW - cornerRadius, -halfH, 0),
-                new THREE.Vector3(-halfW + cornerRadius, -halfH, 0)
-            )
-        );
-
-        // Bottom-left corner
-        framePath.add(
-            new THREE.QuadraticBezierCurve3(
-                new THREE.Vector3(-halfW + cornerRadius, -halfH, 0),
-                new THREE.Vector3(-halfW, -halfH, 0),
-                new THREE.Vector3(-halfW, -halfH + cornerRadius, 0)
-            )
-        );
-
-        // Left edge
-        framePath.add(
-            new THREE.LineCurve3(
-                new THREE.Vector3(-halfW, -halfH + cornerRadius, 0),
-                new THREE.Vector3(-halfW, halfH - cornerRadius, 0)
-            )
-        );
-
-        // Top-left corner
-        framePath.add(
-            new THREE.QuadraticBezierCurve3(
-                new THREE.Vector3(-halfW, halfH - cornerRadius, 0),
-                new THREE.Vector3(-halfW, halfH, 0),
-                new THREE.Vector3(-halfW + cornerRadius, halfH, 0)
-            )
-        );
+        framePath.add(new THREE.LineCurve3(
+            new THREE.Vector3(-halfW + cornerRadius, halfH, 0),
+            new THREE.Vector3(halfW - cornerRadius, halfH, 0)
+        ));
+        framePath.add(new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(halfW - cornerRadius, halfH, 0),
+            new THREE.Vector3(halfW, halfH, 0),
+            new THREE.Vector3(halfW, halfH - cornerRadius, 0)
+        ));
+        framePath.add(new THREE.LineCurve3(
+            new THREE.Vector3(halfW, halfH - cornerRadius, 0),
+            new THREE.Vector3(halfW, -halfH + cornerRadius, 0)
+        ));
+        framePath.add(new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(halfW, -halfH + cornerRadius, 0),
+            new THREE.Vector3(halfW, -halfH, 0),
+            new THREE.Vector3(halfW - cornerRadius, -halfH, 0)
+        ));
+        framePath.add(new THREE.LineCurve3(
+            new THREE.Vector3(halfW - cornerRadius, -halfH, 0),
+            new THREE.Vector3(-halfW + cornerRadius, -halfH, 0)
+        ));
+        framePath.add(new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(-halfW + cornerRadius, -halfH, 0),
+            new THREE.Vector3(-halfW, -halfH, 0),
+            new THREE.Vector3(-halfW, -halfH + cornerRadius, 0)
+        ));
+        framePath.add(new THREE.LineCurve3(
+            new THREE.Vector3(-halfW, -halfH + cornerRadius, 0),
+            new THREE.Vector3(-halfW, halfH - cornerRadius, 0)
+        ));
+        framePath.add(new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(-halfW, halfH - cornerRadius, 0),
+            new THREE.Vector3(-halfW, halfH, 0),
+            new THREE.Vector3(-halfW + cornerRadius, halfH, 0)
+        ));
 
         const frameGeometry = new THREE.TubeGeometry(framePath, 96, thickness, 12, true);
         const frameMesh = new THREE.Mesh(frameGeometry, this.frameMaterial);
 
         frameGroup.add(frameMesh);
         this.frame = frameGroup;
-        this.group.add(frameGroup);
+        this.mesh.add(frameGroup);
     }
 
-    createTubeFromPoints(points2D, radius) {
+    _createTubeFromPoints(points2D, radius) {
         if (points2D.length < 2) return null;
 
         const points3D = points2D.map((p) => new THREE.Vector3(p.x, p.y, 0));
         points3D.push(points3D[0].clone());
 
         const curve = new THREE.CatmullRomCurve3(points3D, false);
-
         const tubeGeometry = new THREE.TubeGeometry(
             curve,
             Math.max(points2D.length * 3, 40),
@@ -343,8 +293,7 @@ export class CurvedText {
             false
         );
 
-        const mesh = new THREE.Mesh(tubeGeometry, this.material);
-        return mesh;
+        return new THREE.Mesh(tubeGeometry, this.material);
     }
 
     clear() {
@@ -352,13 +301,13 @@ export class CurvedText {
             letterGroup.traverse((child) => {
                 if (child.geometry) child.geometry.dispose();
             });
-            this.group.remove(letterGroup);
+            this.mesh.remove(letterGroup);
         });
         this.letterMeshes = [];
 
         if (this.background) {
             this.background.geometry.dispose();
-            this.group.remove(this.background);
+            this.mesh.remove(this.background);
             this.background = null;
         }
 
@@ -366,120 +315,91 @@ export class CurvedText {
             this.frame.traverse((child) => {
                 if (child.geometry) child.geometry.dispose();
             });
-            this.group.remove(this.frame);
+            this.mesh.remove(this.frame);
             this.frame = null;
         }
 
         if (this.hitBox) {
             this.hitBox.geometry.dispose();
-            this.group.remove(this.hitBox);
+            this.mesh.remove(this.hitBox);
             this.hitBox = null;
         }
     }
 
-    // Check if mouse is hovering
     checkHover(mouseNDC, camera) {
         if (!this.hitBox) return false;
-
         this.raycaster.setFromCamera(mouseNDC, camera);
         const intersects = this.raycaster.intersectObject(this.hitBox);
         this.isHovered = intersects.length > 0;
         return this.isHovered;
     }
 
-    // Check for click and trigger callback
     handleClick(mouseNDC, camera) {
-        if (!this.clickable || !this.hitBox) return false;
-
+        if (!this.config.clickable || !this.hitBox) return false;
         this.raycaster.setFromCamera(mouseNDC, camera);
         const intersects = this.raycaster.intersectObject(this.hitBox);
 
         if (intersects.length > 0) {
-            this.onClick?.(this);
+            this.config.onClick?.(this);
             return true;
         }
         return false;
     }
 
-    // Turn neon on
     turnOn() {
         this.isLit = true;
         this.targetGlow = 1;
     }
 
-    // Turn neon off
     turnOff() {
-        if (this.alwaysOn) return; // Don't turn off if always on
+        if (this.config.alwaysOn) return;
         this.isLit = false;
         this.targetGlow = 0;
     }
 
-    // Toggle neon
     toggle() {
-        if (this.isLit && !this.alwaysOn) {
+        if (this.isLit && !this.config.alwaysOn) {
             this.turnOff();
         } else {
             this.turnOn();
         }
     }
 
-    // Focus/expand the sign (bring forward)
-    focus() {
-        this.isFocused = true;
-    }
-
-    // Unfocus (return to original position)
-    unfocus() {
-        this.isFocused = false;
-    }
+    focus() { this.isFocused = true; }
+    unfocus() { this.isFocused = false; }
 
     update(camera, deltaTime) {
+        super.update(camera, deltaTime);
         if (this.letterMeshes.length === 0) return;
 
-        this.time += deltaTime;
+        // Billboard
+        this.mesh.quaternion.copy(camera.quaternion);
 
-        // Billboard - face the camera
-        this.group.quaternion.copy(camera.quaternion);
+        // Focus Z animation
+        const targetZ = this.isFocused ? this.config.focusZ : this.originalZ;
+        this.mesh.position.z += (targetZ - this.mesh.position.z) * 3 * deltaTime;
 
-        // Animate Z position for focus
-        const targetZ = this.isFocused ? this.focusZ : this.originalZ;
-        this.group.position.z += (targetZ - this.group.position.z) * 3 * deltaTime;
-
-        // Animate glow
+        // Glow animation
         this.currentGlow += (this.targetGlow - this.currentGlow) * this.glowSpeed * deltaTime;
 
-        // Update material based on glow
         const glowColor = this.offColor.clone().lerp(this.neonColor, this.currentGlow);
         this.material.color.copy(glowColor);
         this.material.emissive.copy(glowColor);
 
-        // Base emissive intensity
         let emissiveIntensity = 0.1 + this.currentGlow * 0.9;
 
-        // Apply behavior-specific effects
         if (this.isLit && this.currentGlow > 0.5) {
-            switch (this.behavior) {
+            switch (this.config.behavior) {
                 case 'stable':
-                    // No flicker, just steady glow
-                    // Slight hover boost
-                    if (this.isHovered) {
-                        emissiveIntensity *= 1.15;
-                    }
+                    if (this.isHovered) emissiveIntensity *= 1.15;
                     break;
-
                 case 'pulse':
-                    // Slow heartbeat pulse
-                    const pulse = 0.85 + Math.sin(this.time * this.pulseSpeed * Math.PI) * 0.15;
+                    const pulse = 0.85 + Math.sin(this.time * this.config.pulseSpeed * Math.PI) * 0.15;
                     emissiveIntensity *= pulse;
-                    // Hover boost
-                    if (this.isHovered) {
-                        emissiveIntensity *= 1.1;
-                    }
+                    if (this.isHovered) emissiveIntensity *= 1.1;
                     break;
-
                 case 'flicker':
                 default:
-                    // Traditional neon flicker
                     const flicker = 1 + Math.sin(this.time * 30) * 0.02 + Math.random() * 0.02;
                     emissiveIntensity *= flicker;
                     break;
@@ -488,8 +408,8 @@ export class CurvedText {
 
         this.material.emissiveIntensity = emissiveIntensity;
 
-        // Floating animation for each letter (reduced for stable behavior)
-        const floatMultiplier = this.behavior === 'stable' ? 0.3 : 1.0;
+        // Letter floating animation
+        const floatMultiplier = this.config.behavior === 'stable' ? 0.3 : 1.0;
 
         this.letterMeshes.forEach((letterGroup) => {
             const phase = this.time * this.floatSpeed + letterGroup.userData.phaseOffset;
@@ -510,6 +430,6 @@ export class CurvedText {
         this.material.dispose();
         this.frameMaterial.dispose();
         this.backgroundMaterial.dispose();
-        this.scene.remove(this.group);
+        this.scene.remove(this.mesh);
     }
 }

@@ -4,46 +4,53 @@ import { createGlassShader } from '../shaders/glass/glassUniforms.js';
 import { createSSSShader } from '../shaders/sss/sssUniforms.js';
 import { CONFIG } from '../utils/Constants.js';
 import { WasmBridge } from '../wasm/WasmBridge.js';
+import { Component } from './Component.js';
 
-export class Caju {
+export class Caju extends Component {
     constructor(onLoad, performanceSettings = {}) {
-        this.mesh = null;
-        this.onLoad = onLoad;
+        super({
+            ripplesEnabled: performanceSettings.ripplesEnabled !== false,
+            reducedTextures: performanceSettings.reducedTextures,
+            simplifiedMaterials: performanceSettings.simplifiedMaterials !== false,
+            aoMapIntensity: performanceSettings.aoMapIntensity || 1.0
+        });
+
+        this.onLoadCallback = onLoad;
         this.glassUniforms = null;
         this.sssUniforms = [];
-        this.performanceSettings = performanceSettings;
-        this.ripplesEnabled = performanceSettings.ripplesEnabled !== false;
 
+        // Ripple system
         this.ripples = [];
         this.maxRipples = 1;
         this.inflateRipple = null;
         this.raycaster = new THREE.Raycaster();
 
+        // Pre-allocated vectors
         this._attachmentPoint = new THREE.Vector3();
         this._inverseMatrix = new THREE.Matrix4();
 
-        this.audioContext = null; // Created lazily on first user interaction
+        // Audio
+        this.audioContext = null;
         this.sounds = { squeakIn: null, squeakOut: null };
         this.currentSource = null;
         this.soundQueue = [];
-        this.soundsLoaded = false;
 
-        this.loadModel();
+        this._loadModel();
     }
 
-    loadModel() {
+    _loadModel() {
         const textureLoader = new THREE.TextureLoader();
-        const loadAllTextures = !this.performanceSettings.reducedTextures;
+        const loadAllTextures = !this.config.reducedTextures;
 
         const baseColor = textureLoader.load(CONFIG.TEXTURE_PATHS.cajuBaseColor);
         baseColor.colorSpace = THREE.SRGBColorSpace;
         baseColor.flipY = false;
 
         const normal = loadAllTextures
-            ? this.loadTexture(textureLoader, CONFIG.TEXTURE_PATHS.cajuNormal)
+            ? this._loadTexture(textureLoader, CONFIG.TEXTURE_PATHS.cajuNormal)
             : null;
         const orm = loadAllTextures
-            ? this.loadTexture(textureLoader, CONFIG.TEXTURE_PATHS.cajuORM)
+            ? this._loadTexture(textureLoader, CONFIG.TEXTURE_PATHS.cajuORM)
             : null;
 
         new GLTFLoader().load(CONFIG.MODEL_PATHS.caju, (gltf) => {
@@ -53,52 +60,41 @@ export class Caju {
             this.mesh.traverse((child) => {
                 if (!child.isMesh) return;
 
-                this.ensureUV2(child);
+                this._ensureUV2(child);
 
                 if (child.name === 'eye_2') {
-                    this.setupGlassEye(child);
+                    this._setupGlassEye(child);
                 } else {
-                    this.setupBodyMaterial(child, baseColor, normal, orm);
+                    this._setupBodyMaterial(child, baseColor, normal, orm);
                 }
             });
 
-            this.onLoad?.(this);
+            this._onLoad(this.onLoadCallback);
         });
     }
 
-    ensureUV2(mesh) {
-        if (!mesh.geometry.attributes.uv2 && mesh.geometry.attributes.uv) {
-            mesh.geometry.setAttribute('uv2', mesh.geometry.attributes.uv);
-        }
-    }
-
-    loadTexture(loader, path) {
+    _loadTexture(loader, path) {
         const tex = loader.load(path);
         tex.flipY = false;
         return tex;
     }
 
-    setupGlassEye(mesh) {
-        if (!this.ripplesEnabled) {
+    _ensureUV2(mesh) {
+        if (!mesh.geometry.attributes.uv2 && mesh.geometry.attributes.uv) {
+            mesh.geometry.setAttribute('uv2', mesh.geometry.attributes.uv);
+        }
+    }
+
+    _setupGlassEye(mesh) {
+        if (!this.config.ripplesEnabled) {
             mesh.visible = false;
             this.glassUniforms = { uTime: { value: 0 } };
             return;
         }
 
-        const useSimplifiedGlass = this.performanceSettings.simplifiedMaterials !== false;
-        let material;
-
-        if (useSimplifiedGlass) {
-            material = new THREE.MeshStandardMaterial({
-                ...CONFIG.GLASS_MATERIAL_SIMPLE,
-                side: THREE.DoubleSide
-            });
-        } else {
-            material = new THREE.MeshPhysicalMaterial({
-                ...CONFIG.GLASS_MATERIAL,
-                side: THREE.DoubleSide
-            });
-        }
+        const material = this.config.simplifiedMaterials
+            ? new THREE.MeshStandardMaterial({ ...CONFIG.GLASS_MATERIAL_SIMPLE, side: THREE.DoubleSide })
+            : new THREE.MeshPhysicalMaterial({ ...CONFIG.GLASS_MATERIAL, side: THREE.DoubleSide });
 
         material.onBeforeCompile = (shader) => {
             createGlassShader(shader);
@@ -109,7 +105,7 @@ export class Caju {
         mesh.renderOrder = 100;
     }
 
-    setupBodyMaterial(mesh, baseColor, normal, orm) {
+    _setupBodyMaterial(mesh, baseColor, normal, orm) {
         const config = {
             map: baseColor,
             metalness: mesh.name === 'plaque' ? 1.0 : 0.1,
@@ -119,15 +115,13 @@ export class Caju {
         if (normal) config.normalMap = normal;
         if (orm) {
             config.aoMap = orm;
-            config.aoMapIntensity = this.performanceSettings.aoMapIntensity || 1.0;
+            config.aoMapIntensity = this.config.aoMapIntensity;
             config.roughnessMap = orm;
             config.metalnessMap = orm;
         }
 
-        const useFastMaterial = this.performanceSettings.simplifiedMaterials !== false;
         let material;
-
-        if (useFastMaterial) {
+        if (this.config.simplifiedMaterials) {
             material = new THREE.MeshStandardMaterial(config);
         } else {
             Object.assign(config, {
@@ -143,7 +137,7 @@ export class Caju {
             material = new THREE.MeshPhysicalMaterial(config);
         }
 
-        if (this.ripplesEnabled) {
+        if (this.config.ripplesEnabled) {
             material.onBeforeCompile = (shader) => {
                 createSSSShader(shader);
                 this.sssUniforms.push(shader.uniforms);
@@ -154,28 +148,30 @@ export class Caju {
         mesh.renderOrder = 100;
     }
 
-    async loadSounds() {
+    // --- Audio ---
+
+    async _loadSounds() {
         try {
             const [squeakIn, squeakOut] = await Promise.all([
-                this.loadAudioBuffer('./assets/audio/squeaky_in.wav'),
-                this.loadAudioBuffer('./assets/audio/squeaky_out.wav')
+                this._loadAudioBuffer('./assets/audio/squeaky_in.wav'),
+                this._loadAudioBuffer('./assets/audio/squeaky_out.wav')
             ]);
             this.sounds.squeakIn = squeakIn;
             this.sounds.squeakOut = squeakOut;
         } catch (e) {}
     }
 
-    async loadAudioBuffer(path) {
+    async _loadAudioBuffer(path) {
         const response = await fetch(path);
         const buffer = await response.arrayBuffer();
         return this.audioContext.decodeAudioData(buffer);
     }
 
     playSound(type, cancelQueue = false) {
-        if (!this.audioContext) return; // Audio not initialized yet
+        if (!this.audioContext) return;
 
         if (cancelQueue) {
-            this.stopCurrentSound();
+            this._stopCurrentSound();
             this.soundQueue = [];
         }
 
@@ -212,25 +208,30 @@ export class Caju {
         source.start(0);
     }
 
-    stopCurrentSound() {
+    _stopCurrentSound() {
         if (this.currentSource) {
-            try {
-                this.currentSource.stop();
-            } catch (e) {}
+            try { this.currentSource.stop(); } catch (e) {}
             this.currentSource = null;
         }
     }
 
-    getMesh() {
-        return this.mesh;
+    unlockAudio() {
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this._loadSounds();
+        }
+
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
     }
 
-    // Get world position with offset from mesh center
-    getAttachmentPoint(offset = { x: 0, y: 0.0, z: 0 }) {
+    // --- Update ---
+
+    getAttachmentPoint(offset = { x: 0, y: 0, z: 0 }) {
         if (!this.mesh) return null;
 
         this.mesh.getWorldPosition(this._attachmentPoint);
-
         this._attachmentPoint.x += offset.x;
         this._attachmentPoint.y += offset.y;
         this._attachmentPoint.z += offset.z;
@@ -238,32 +239,31 @@ export class Caju {
         return this._attachmentPoint;
     }
 
-    update(deltaTime) {
+    update(cameraOrDelta, deltaTime) {
+        // Backward compatible: support both update(deltaTime) and update(camera, deltaTime)
+        const dt = typeof cameraOrDelta === 'number' ? cameraOrDelta : deltaTime;
+        super.update(null, dt);
         if (!this.glassUniforms) return;
 
-        this.glassUniforms.uTime.value += deltaTime;
+        this.glassUniforms.uTime.value += dt;
         this.sssUniforms.forEach((uniforms) => {
-            uniforms.uTime.value += deltaTime;
+            uniforms.uTime.value += dt;
         });
 
         const currentTime = this.glassUniforms.uTime.value;
         this.ripples = this.ripples.filter((r) => currentTime - r.time < CONFIG.RIPPLE_LIFETIME);
 
-        // Update inverse model matrix for shaders (computed via WASM when available)
-        this.updateInverseMatrix();
-
-        this.updateRippleUniforms(this.glassUniforms);
-        this.sssUniforms.forEach((uniforms) => this.updateRippleUniforms(uniforms));
+        this._updateInverseMatrix();
+        this._updateRippleUniforms(this.glassUniforms);
+        this.sssUniforms.forEach((uniforms) => this._updateRippleUniforms(uniforms));
     }
 
-    updateInverseMatrix() {
+    _updateInverseMatrix() {
         if (!this.mesh) return;
 
-        // Compute inverse matrix once on CPU (faster than per-vertex in shader)
         let computed = false;
 
         if (WasmBridge.isReady()) {
-            // Use WASM for faster matrix computation
             const inverseArray = WasmBridge.computeInverseMatrix(this.mesh.matrixWorld);
             if (inverseArray) {
                 this._inverseMatrix.fromArray(inverseArray);
@@ -271,12 +271,10 @@ export class Caju {
             }
         }
 
-        // Fallback to Three.js if WASM not available
         if (!computed) {
             this._inverseMatrix.copy(this.mesh.matrixWorld).invert();
         }
 
-        // Update all shader uniforms
         if (this.glassUniforms?.uInverseModelMatrix) {
             this.glassUniforms.uInverseModelMatrix.value.copy(this._inverseMatrix);
         }
@@ -287,10 +285,10 @@ export class Caju {
         });
     }
 
-    updateRippleUniforms(uniforms) {
+    _updateRippleUniforms(uniforms) {
         if (!uniforms.uRipplePositions || !uniforms.uRippleTimes || !uniforms.uRippleTypes) return;
 
-        if (!this.ripplesEnabled) {
+        if (!this.config.ripplesEnabled) {
             for (let i = 0; i < 5; i++) {
                 uniforms.uRipplePositions.value[i].set(0, 0, 0);
                 uniforms.uRippleTimes.value[i] = 0;
@@ -320,42 +318,37 @@ export class Caju {
         }
     }
 
-    unlockAudio() {
-        // Create AudioContext on first user interaction (required by browsers)
-        if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            this.loadSounds(); // Load sounds after context is created
-        }
+    // --- Interaction ---
 
-        if (this.audioContext.state === 'suspended') {
-            this.audioContext.resume();
-        }
+    handleClick(hitPoint, camera) {
+        this.unlockAudio();
+
+        this.ripples = [];
+        const currentTime = this.glassUniforms?.uTime.value || 0;
+        this.inflateRipple = {
+            position: hitPoint.clone(),
+            time: currentTime
+        };
+        this.playSound('in', true);
+        return true;
     }
 
     handlePress(mouseNDC, camera) {
         if (!this.mesh) return false;
 
-        // iOS requires resume on user gesture
         this.unlockAudio();
 
-        // Try WASM raycasting first (faster for complex meshes)
         let hitPoint = null;
 
         if (WasmBridge.isReady()) {
             this.raycaster.setFromCamera(mouseNDC, camera);
             const ray = this.raycaster.ray;
-            const hit = WasmBridge.raycast(
-                'caju',
-                ray.origin,
-                ray.direction,
-                this.mesh.matrixWorld
-            );
+            const hit = WasmBridge.raycast('caju', ray.origin, ray.direction, this.mesh.matrixWorld);
             if (hit) {
                 hitPoint = new THREE.Vector3(hit.point.x, hit.point.y, hit.point.z);
             }
         }
 
-        // Fallback to Three.js raycaster
         if (!hitPoint) {
             this.raycaster.setFromCamera(mouseNDC, camera);
             const intersects = this.raycaster.intersectObject(this.mesh, true);
@@ -367,10 +360,7 @@ export class Caju {
         if (hitPoint) {
             this.ripples = [];
             const currentTime = this.glassUniforms?.uTime.value || 0;
-            this.inflateRipple = {
-                position: hitPoint,
-                time: currentTime
-            };
+            this.inflateRipple = { position: hitPoint, time: currentTime };
             this.playSound('in', true);
             return true;
         }
@@ -384,36 +374,22 @@ export class Caju {
         const pullDepth = this.inflateRipple.position.distanceTo(camera.position);
         const vector = new THREE.Vector3(mouseNDC.x, mouseNDC.y, 0.5).unproject(camera);
         const dir = vector.sub(camera.position).normalize();
-        this.inflateRipple.position.copy(
-            camera.position.clone().add(dir.multiplyScalar(pullDepth))
-        );
+        this.inflateRipple.position.copy(camera.position.clone().add(dir.multiplyScalar(pullDepth)));
     }
 
     handleRelease() {
         if (!this.inflateRipple) return;
 
         const currentTime = this.glassUniforms?.uTime.value || 0;
-        this.ripples = [
-            {
-                position: this.inflateRipple.position.clone(),
-                time: currentTime
-            }
-        ];
+        this.ripples = [{ position: this.inflateRipple.position.clone(), time: currentTime }];
         this.inflateRipple = null;
         this.playSound('out', false);
     }
 
     dispose() {
-        this.mesh?.traverse((child) => {
-            if (!child.isMesh) return;
-            child.geometry.dispose();
-            ['map', 'normalMap', 'aoMap', 'metalnessMap', 'roughnessMap'].forEach((key) => {
-                child.material[key]?.dispose();
-            });
-            child.material.dispose();
-        });
+        super.dispose();
 
-        this.stopCurrentSound();
+        this._stopCurrentSound();
         this.soundQueue = [];
         if (this.audioContext) {
             this.audioContext.close().catch(() => {});
