@@ -26,7 +26,6 @@ export class HybridRaycaster {
     }
 
     _castThree(objects) {
-        console.log('Using Three.js raycaster fallback');
         const intersects = this._raycaster.intersectObjects(objects);
         if (intersects.length === 0) return null;
 
@@ -37,7 +36,6 @@ export class HybridRaycaster {
     }
 
     _castWasm(objects) {
-        console.log('Using Three.js raycaster fallback');
         const ray = this._raycaster.ray;
 
         for (const object of objects) {

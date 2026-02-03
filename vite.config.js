@@ -44,6 +44,8 @@ export default defineConfig({
         copyDir(resolve(__dirname, 'fonts'), resolve(__dirname, 'dist/fonts'));
         // Copy styles folder
         copyDir(resolve(__dirname, 'styles'), resolve(__dirname, 'dist/styles'));
+        // Copy Cloudflare headers file
+        copyFileSync(resolve(__dirname, '_headers'), resolve(__dirname, 'dist/_headers'));
       }
     }
   ],
